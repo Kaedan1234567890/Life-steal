@@ -1,0 +1,26 @@
+plugins { id 'base' }
+
+version = '0.2.0'
+
+// The original mod is datapack-based. Package its actual functions and Fabric metadata.
+tasks.register('serverJar', Jar) {
+    archiveBaseName = 'chillzone-lifesteal-server'
+    archiveVersion = project.version.toString()
+    from 'src/main/resources'
+    destinationDirectory = file("$buildDir/libs")
+    doLast {
+        def entryNames = archiveFile.get().asFile.withInputStream { input ->
+            def zip = new java.util.zip.ZipInputStream(input)
+            def names = []
+            def entry
+            while ((entry = zip.nextEntry) != null) names << entry.name
+            zip.close()
+            names
+        }
+        ['fabric.mod.json', 'pack.mcmeta', 'data/minecraft/tags/function/load.json', 'data/life_steal/function/player/tick.mcfunction'].each { item ->
+            if (!entryNames.contains(item)) throw new GradleException("Missing entry: $item")
+        }
+        println "Validated Lifesteal resource JAR: " + archiveFile.get().asFile.name
+    }
+}
+tasks.named('assemble') { dependsOn tasks.named('serverJar') }

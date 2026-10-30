@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "stewbeet_lifestealfr",
+  "version": "2.5.1-cz.0.2.0",
+  "name": "Chill Zone Lifesteal \u2014 Server Prototype 0.2.0",
+  "description": "Life Steal FR is a simple datapack configurable aiming to add life steal behaviours from the original Lifesteal SMP:\nhttps://lifesteal.fandom.com/wiki/Season_1 | Chill Zone 0.2.0: server-only packaging and load fallback",
+  "authors": [
+    "Stoupy51"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/datapack/lifestealfr",
+    "sources": "https://github.com/Stoupy51/LifeSteal",
+    "issues": "https://github.com/Stoupy51/LifeSteal/issues"
+  },
+  "license": "MIT",
+  "icon": "lifestealfr_pack.png",
+  "environment": "server",
+  "depends": {
+    "fabric-resource-loader-v0": "*"
+  }
+}

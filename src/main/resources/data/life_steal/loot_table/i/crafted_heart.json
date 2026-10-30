@@ -1,0 +1,45 @@
+{
+	"pools": [
+		{
+			"rolls": 1,
+			"entries": [
+				{
+					"type": "minecraft:item",
+					"name": "minecraft:recovery_compass",
+					"modifier": [
+						{
+							"type": "minecraft:set_components",
+							"components": {
+								"minecraft:damage_resistant": {
+									"types": "#life_steal:is_explosion_or_fire"
+								},
+								"minecraft:consumable": {},
+								"minecraft:item_model": "life_steal:crafted_heart",
+								"minecraft:item_name": {
+									"text": "Crafted Heart"
+								},
+								"minecraft:lore": [
+									[
+										"",
+										{"text": "ꀁ","color": "white","italic": false,"font": "life_steal:tooltip"},
+										{"text": "뀁LifeSteal","italic": false,"color": "white","font": "life_steal:tooltip"}
+									]
+								],
+								"minecraft:custom_data": {
+									"life_steal": {
+										"crafted_heart": true
+									},
+									"smithed": {
+										"id": "life_steal:crafted_heart",
+										"origin": "life_steal",
+										"ignore": {"functionality": true,"crafting": true}
+									}
+								}
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
