@@ -34,3 +34,10 @@ The provided source uses Mojang-mapped 26.3 APIs. Compilation has NOT been compl
 - Replaces nonexistent `ServerPlayer.giveOrDropStack(ItemStack)` with `ServerPlayer.getInventory().add(ItemStack)`, already used elsewhere in this source.
 - `/withdraw` now deducts only hearts that were successfully placed in the player's inventory. If inventory capacity runs out, undelivered hearts stay in the player's heart total.
 - This is a targeted fix for the GitHub compilation error at `ChillZoneLifesteal.java:120`; compilation and server behavior have **not** yet been independently verified.
+
+
+## Alpha 4 GitHub diagnostic build
+This update changes **only** the GitHub workflow and version, not Java gameplay or heart-transfer code.
+Run **Actions → Build Chill Zone Lifesteal 0.1.3-alpha.4 (diagnostic) → Run workflow**.
+The build has a hard timeout so it cannot hang forever. The `chillzone-lifesteal-alpha4-diagnostic-log` artifact appears even if compilation fails (when the log exists). Download it to identify the last Gradle step. A successful build produces a separate JAR artifact.
+Do not upload the ZIP as a Minecraft mod; the ZIP contains GitHub source.
