@@ -1,0 +1,24 @@
+# Chill Zone Lifesteal 0.1.0-alpha.1 — CORE PROTOTYPE
+
+This is an **independent from-scratch Fabric 26.3 server mod**, not a copy of LifeSteal FR.
+
+## Implemented in source (not yet compiled or server-tested)
+- PvP death transfers one heart from a victim to the killer, up to 20 hearts.
+- Maximum-health attribute updates and persists by UUID to `world/data/chillzone-lifesteal.json`.
+- Default 10 hearts, min 1, max 20; natural deaths do not lose hearts by default.
+- `/withdraw <amount>` gives uniquely tagged **vanilla Nether Stars** with bold red Heart names (no resource pack).
+- Right-click marked Heart to gain a heart instantly; ordinary Nether Stars are unaffected.
+- `/lifesteal`, `/lifesteal hearts`, OP-level-3 `/lifesteal admin giveheart <player>`, `sethearts <player> <amount>`, `maxhearts <amount>`, `pvploss on|off`, `naturalloss on|off`.
+
+## NOT implemented in this alpha
+- Last-heart elimination/ban/revival, revive beacon item or hopper GUI, craft recipes.
+- Other settings from the 14-setting reference, full settings GUI, Lifesteal-specific LuckPerms nodes.
+- Combat tagging, home restrictions, item restriction GUI; Season 1 Combat core source is required.
+- Anti-farming, heart-cap economy balancing, sophisticated death attribution, restart/gameplay testing.
+
+**Do not deploy on a live survival world.** Test build and behavior on an isolated test server first. When a player's heart count reaches one, this prototype deliberately does not ban the player.
+
+## GitHub
+Upload the ZIP contents at repository root. Actions → Build Chill Zone Lifesteal 0.1.0-alpha.1 → Run workflow. Only the successful JAR from Actions goes into the server `mods` folder. Java 25 is required for compilation.
+
+The provided source uses Mojang-mapped 26.3 APIs. Compilation has NOT been completed in this environment and minor API adjustments may be needed. Do not confuse source presence with verified functionality.

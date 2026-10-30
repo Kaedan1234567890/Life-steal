@@ -1,8 +1,8 @@
-name: Build Chill Zone Lifesteal 0.2.0
+name: Build Chill Zone Lifesteal 0.1.0-alpha.1
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    paths: ['src/**', 'build.gradle', 'gradle.properties', 'settings.gradle', '.github/workflows/build.yml']
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,18 +11,14 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.14'
-      - name: Build resource mod
-        run: gradle clean assemble --console=plain --stacktrace
-      - name: Check commands and metadata
-        run: |
-          unzip -l build/libs/chillzone-lifesteal-server-0.2.0.jar | grep 'data/life_steal/function/chillzone/bootstrap.mcfunction'
-          unzip -p build/libs/chillzone-lifesteal-server-0.2.0.jar fabric.mod.json | grep '"environment": "server"'
+          gradle-version: '9.8.2'
+      - name: Compile with full error messages
+        run: gradle clean build --stacktrace --console=plain
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: chillzone-lifesteal-server-0.2.0-jar
-          path: build/libs/chillzone-lifesteal-server-0.2.0.jar
-          if-no-files-found: error
+          name: chillzone-lifesteal-0.1.0-alpha.1
+          path: build/libs/*.jar

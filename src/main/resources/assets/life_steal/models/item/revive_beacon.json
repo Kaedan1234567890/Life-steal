@@ -1,9 +1,0 @@
-{
-	"parent": "minecraft:block/beacon",
-	"textures": {
-		"beacon": "life_steal:item/inner_beacon",
-		"particle": "life_steal:item/inner_beacon",
-		"glass": "life_steal:item/glass_beacon",
-		"obsidian": "life_steal:item/obsidian_beacon"
-	}
-}
