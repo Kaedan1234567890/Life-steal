@@ -117,7 +117,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     setHearts(p, heartCount(p) - amount);
                     for (int i = 0; i < amount; i++) {
                         ItemStack item = makeHeart();
-                        if (!p.getInventory().add(item)) p.drop(item, false);
+                        p.giveOrDropStack(item);
                     }
                     p.sendSystemMessage(Component.literal("Withdrew " + amount + " heart(s); you have " + heartCount(p) + " remaining."));
                     return 1;
@@ -128,7 +128,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
                 p.sendSystemMessage(Component.literal("Your hearts: " + heartCount(p) + "/" + state.maxHearts)); return 1;
             }));
-            root.then(Commands.literal("admin").requires(s -> s.hasPermission(3))
+            root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.literal("giveheart").then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
                     ServerPlayer target = EntityArgument.getPlayer(ctx, "player"); target.getInventory().add(makeHeart()); return 1;
                 })))

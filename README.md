@@ -22,3 +22,9 @@ This is an **independent from-scratch Fabric 26.3 server mod**, not a copy of Li
 Upload the ZIP contents at repository root. Actions → Build Chill Zone Lifesteal 0.1.0-alpha.1 → Run workflow. Only the successful JAR from Actions goes into the server `mods` folder. Java 25 is required for compilation.
 
 The provided source uses Mojang-mapped 26.3 APIs. Compilation has NOT been completed in this environment and minor API adjustments may be needed. Do not confuse source presence with verified functionality.
+
+
+## Alpha 2 — 26.3 compiler repairs
+- Replace the old `ServerPlayer.drop(ItemStack, boolean)` call with the 26.3 `giveOrDropStack(ItemStack)` API to avoid losing withdrawn Heart items when the inventory is full.
+- Replace integer `CommandSourceStack.hasPermission(3)` with the 26.3 Brigadier `Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)` requirement.
+- Gameplay design unchanged. These are source-level fixes; full Gradle compilation and in-game verification are still pending.
