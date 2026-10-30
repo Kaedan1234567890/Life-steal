@@ -114,12 +114,20 @@ public final class ChillZoneLifesteal implements ModInitializer {
                         p.sendSystemMessage(Component.literal("You must keep at least " + state.minHearts + " heart(s).").withStyle(ChatFormatting.RED));
                         return 0;
                     }
-                    setHearts(p, heartCount(p) - amount);
+                    // Give only what actually fits; never deduct hearts for an item that was not delivered.
+                    int delivered = 0;
                     for (int i = 0; i < amount; i++) {
                         ItemStack item = makeHeart();
-                        p.giveOrDropStack(item);
+                        if (!p.getInventory().add(item)) break;
+                        delivered++;
                     }
-                    p.sendSystemMessage(Component.literal("Withdrew " + amount + " heart(s); you have " + heartCount(p) + " remaining."));
+                    if (delivered == 0) {
+                        p.sendSystemMessage(Component.literal("Your inventory is full. No hearts were withdrawn.").withStyle(ChatFormatting.RED));
+                        return 0;
+                    }
+                    setHearts(p, heartCount(p) - delivered);
+                    p.sendSystemMessage(Component.literal("Withdrew " + delivered + " heart(s); you have " + heartCount(p) + " remaining."));
+                    if (delivered < amount) p.sendSystemMessage(Component.literal("Inventory full: " + (amount - delivered) + " heart(s) were not withdrawn.").withStyle(ChatFormatting.YELLOW));
                     return 1;
                 })));
             var root = Commands.literal("lifesteal");

@@ -28,3 +28,9 @@ The provided source uses Mojang-mapped 26.3 APIs. Compilation has NOT been compl
 - Replace the old `ServerPlayer.drop(ItemStack, boolean)` call with the 26.3 `giveOrDropStack(ItemStack)` API to avoid losing withdrawn Heart items when the inventory is full.
 - Replace integer `CommandSourceStack.hasPermission(3)` with the 26.3 Brigadier `Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)` requirement.
 - Gameplay design unchanged. These are source-level fixes; full Gradle compilation and in-game verification are still pending.
+
+
+## Alpha 3 inventory compatibility fix
+- Replaces nonexistent `ServerPlayer.giveOrDropStack(ItemStack)` with `ServerPlayer.getInventory().add(ItemStack)`, already used elsewhere in this source.
+- `/withdraw` now deducts only hearts that were successfully placed in the player's inventory. If inventory capacity runs out, undelivered hearts stay in the player's heart total.
+- This is a targeted fix for the GitHub compilation error at `ChillZoneLifesteal.java:120`; compilation and server behavior have **not** yet been independently verified.
