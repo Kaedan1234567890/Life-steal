@@ -30,7 +30,7 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.SimpleContainer;
@@ -300,9 +300,9 @@ public final class ChillZoneLifesteal implements ModInitializer {
         if (!state.eliminated.contains(targetId)) {openReviveMenu(player,admin,0);return;}
         SimpleContainer inv=new SimpleContainer(27);
         String name=state.eliminatedNames.getOrDefault(targetId,targetId);
-        ItemStack cancel=new ItemStack(Items.RED_CONCRETE);cancel.set(DataComponents.CUSTOM_NAME,Component.literal("Cancel").withStyle(ChatFormatting.RED));inv.setItem(11,cancel);
+        ItemStack cancel=new ItemStack(Items.REDSTONE);cancel.set(DataComponents.CUSTOM_NAME,Component.literal("Cancel").withStyle(ChatFormatting.RED));inv.setItem(11,cancel);
         ItemStack head=new ItemStack(Items.PLAYER_HEAD);head.set(DataComponents.CUSTOM_NAME,Component.literal(name));inv.setItem(13,head);
-        ItemStack confirm=new ItemStack(Items.LIME_CONCRETE);confirm.set(DataComponents.CUSTOM_NAME,Component.literal("Confirm revival").withStyle(ChatFormatting.GREEN));inv.setItem(15,confirm);
+        ItemStack confirm=new ItemStack(Items.EMERALD);confirm.set(DataComponents.CUSTOM_NAME,Component.literal("Confirm revival").withStyle(ChatFormatting.GREEN));inv.setItem(15,confirm);
         player.openMenu(new MenuProvider(){
             @Override public Component getDisplayName(){return Component.literal("Revive "+name+"?");}
             @Override public AbstractContainerMenu createMenu(int id,Inventory inventory,Player p){
@@ -325,8 +325,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         ReviveMenu(int id, Inventory inv, SimpleContainer chest,java.util.function.IntConsumer handler){
             super(MenuType.GENERIC_9x3,id,inv,chest,3);this.handler=handler;
         }
-        @Override public void clicked(int slot,int button,ClickType click,Player player){
-            if(slot>=0 && slot<27){if(click==ClickType.PICKUP && button==0) handler.accept(slot);return;}
+        @Override public void clicked(int slot,int button,ContainerInput click,Player player){
+            if(slot>=0 && slot<27){if(click==ContainerInput.PICKUP && button==0) handler.accept(slot);return;}
             super.clicked(slot,button,click,player);
         }
         @Override public ItemStack quickMoveStack(Player player,int slot){return ItemStack.EMPTY;}

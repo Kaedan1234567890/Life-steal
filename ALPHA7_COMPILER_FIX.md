@@ -1,0 +1,1 @@
+Fixes the 26.3 ClickType rename to ContainerInput in chest click handlers. Switches GUI confirm/cancel icons to vanilla redstone/emerald to remove an ambiguous item symbol error. Retains existing revival and heart code. Not compiled or runtime tested.
