@@ -257,6 +257,26 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     p.sendSystemMessage(Component.literal("Combat tag: " + remaining + "s; configured duration: " + state.combatTagSeconds + "s"));
                     return 1;
                 })))
+                .then(Commands.literal("reset")
+                    .executes(ctx -> {
+                        ctx.getSource().sendFailure(Component.literal("To erase all Lifesteal hearts and eliminations, use: /lifesteal admin reset CONFIRM").withStyle(ChatFormatting.YELLOW));
+                        return 0;
+                    })
+                    .then(Commands.literal("CONFIRM").executes(ctx -> {
+                        // Keep settings; clear only Season-player state and death bans.
+                        state.hearts.clear();
+                        state.eliminated.clear();
+                        state.eliminatedNames.clear();
+                        state.eliminatedKillers.clear();
+                        pendingKicks.clear();
+                        combatTaggedUntil.clear();
+                        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                            setHearts(online, state.startHearts);
+                        }
+                        save();
+                        ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal season data reset: online players start at " + state.startHearts + " hearts; all death bans cleared. Offline players will use the starting total when they return.").withStyle(ChatFormatting.GREEN), true);
+                        return 1;
+                    })))
                 .then(Commands.literal("revive").executes(ctx -> {
                     openReviveMenu(ctx.getSource().getPlayerOrException(), true, 0); return 1;
                 })));
