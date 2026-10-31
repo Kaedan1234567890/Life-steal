@@ -64,6 +64,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         int maxHearts = 20;
         int minHearts = 1;
         boolean pvpLoss = true;
+        boolean pvpEnabled = true;
+        Set<String> pendingReviveSpawns = new HashSet<>();
         boolean naturalDeathLoss = false;
         boolean stealOnKill = true;
         Map<String, Integer> hearts = new HashMap<>();
@@ -87,6 +89,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             catch (Exception e) { System.err.println("[ChillZoneLifesteal] Unable to read state: " + e); }
             if (state == null || state.hearts == null) state = new State();
             if (state.eliminated == null) state.eliminated = new HashSet<>();
+            if (state.pendingReviveSpawns == null) state.pendingReviveSpawns = new HashSet<>();
             if (state.knownNames == null) state.knownNames = new HashMap<>();
             if (state.eliminatedNames == null) state.eliminatedNames = new HashMap<>();
             if (state.eliminatedKillers == null) state.eliminatedKillers = new HashMap<>();
@@ -103,6 +106,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (state.deathBans && state.eliminated.contains(player.getUUID().toString())) {
                 handler.disconnect(Component.literal("You have been death banned from Chill Zone SMP. You must be revived to rejoin.").withStyle(ChatFormatting.RED));
             }
+            // Pending revival relocation is processed after the player has joined the world.
         });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             ticks++;
@@ -112,6 +116,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 if (!state.containersAllowed) ejectRestrictedFromOpenContainer(player);
             }
             combatTaggedUntil.entrySet().removeIf(e -> e.getValue() <= ticks);
+            // A pending revival is not cleared until a safe teleport has been implemented and confirmed.
+
             for (ServerPlayer p : s.getPlayerList().getPlayers()) {
                 long remainingTicks = combatTaggedUntil.getOrDefault(p.getUUID(), 0L) - ticks;
                 if (remainingTicks > 0) {
@@ -132,7 +138,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             }
         });
         ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, damage, baseDamageTaken, damageTaken, blocked) -> {
-            if (!state.combatTagEnabled) return;
+            if (!state.combatTagEnabled || !state.pvpEnabled) return;
             if (!(entity instanceof ServerPlayer victim)) return;
             if (!(damage.getEntity() instanceof ServerPlayer attacker)) return;
             if (attacker.getUUID().equals(victim.getUUID())) return;
@@ -143,7 +149,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damage) -> {
             if (!(entity instanceof ServerPlayer victim)) return;
             ServerPlayer killer = damage.getEntity() instanceof ServerPlayer p && !p.getUUID().equals(victim.getUUID()) ? p : null;
-            if (killer != null && state.pvpLoss) {
+            if (killer != null && state.pvpLoss && state.pvpEnabled) {
                 int before = heartCount(victim);
                 if (before > state.minHearts) {
                     setHearts(victim, before - 1);
@@ -327,6 +333,9 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 .then(Commands.literal("maxhearts").then(Commands.argument("amount", IntegerArgumentType.integer(1, 100)).executes(ctx -> {
                     state.maxHearts = IntegerArgumentType.getInteger(ctx, "amount"); save(); return 1;
                 })))
+                .then(Commands.literal("pvp")
+                    .then(Commands.literal("on").executes(ctx -> { state.pvpEnabled=true; save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal PvP enabled."),true); return 1;}))
+                    .then(Commands.literal("off").executes(ctx -> { state.pvpEnabled=false; combatTaggedUntil.clear(); save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal PvP disabled (heart transfers and tags)."),true); return 1;})))
                 .then(Commands.literal("pvploss").then(Commands.literal("on").executes(ctx -> {state.pvpLoss=true;save();return 1;}))
                     .then(Commands.literal("off").executes(ctx -> {state.pvpLoss=false;save();return 1;})))
                 .then(Commands.literal("naturalloss").then(Commands.literal("on").executes(ctx -> {state.naturalDeathLoss=true;save();return 1;}))
@@ -558,6 +567,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     if(!state.eliminated.contains(targetId)){player.sendSystemMessage(Component.literal("Already revived.").withStyle(ChatFormatting.RED));openReviveMenu(player,admin,0);return;}
                     if(!admin && !consumeReviveBeacon(player)){player.sendSystemMessage(Component.literal("Revive Beacon missing; revival canceled.").withStyle(ChatFormatting.RED));player.closeContainer();return;}
                     state.eliminated.remove(targetId);
+                    state.pendingReviveSpawns.add(targetId);
                     state.hearts.put(targetId,Math.min(state.maxHearts,4));
                     save();
                     player.sendSystemMessage(Component.literal("Successfully revived "+name+" with 4 hearts!").withStyle(ChatFormatting.GREEN));
