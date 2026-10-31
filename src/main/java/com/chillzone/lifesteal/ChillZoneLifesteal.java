@@ -279,7 +279,11 @@ public final class ChillZoneLifesteal implements ModInitializer {
             slot.set(ItemStack.EMPTY);
             slot.setChanged();
             own.add(copy);
-            if (!copy.isEmpty()) player.drop(copy, false);
+            if (!copy.isEmpty()) {
+                net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+                    player.level(), player.getX(), player.getY() + 0.5, player.getZ(), copy);
+                player.level().addFreshEntity(dropped);
+            }
             player.sendSystemMessage(Component.literal("Lifesteal items cannot be stored here.").withStyle(ChatFormatting.YELLOW));
         }
     }
