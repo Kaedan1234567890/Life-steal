@@ -35,6 +35,7 @@ import java.util.*;
 public final class ChillZoneLifesteal implements ModInitializer {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String HEART_MARKER = "chillzone_lifesteal_heart";
+    private static final String REVIVE_BEACON_MARKER = "chillzone_lifesteal_revive_beacon";
     private static MinecraftServer server;
     private static State state = new State();
     private static Path saveFile;
@@ -136,10 +137,24 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
                 p.sendSystemMessage(Component.literal("Your hearts: " + heartCount(p) + "/" + state.maxHearts)); return 1;
             }));
+            root.then(Commands.literal("craftstatus").executes(ctx -> {
+                ServerPlayer p = ctx.getSource().getPlayerOrException();
+                p.sendSystemMessage(Component.literal("Heart crafting eligibility: " +
+                    (mayCraftHeart(p) ? "allowed (below 15 hearts)" : "blocked (15 or more hearts)") +
+                    ". Crafting output enforcement will be added after the special recipes are implemented."));
+                return 1;
+            }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
-                .then(Commands.literal("giveheart").then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
-                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player"); target.getInventory().add(makeHeart()); return 1;
-                })))
+                .then(Commands.literal("giveheart").then(Commands.argument("player", EntityArgument.player())
+                    .executes(ctx -> giveItems(ctx.getSource().getPlayerOrException(), EntityArgument.getPlayer(ctx, "player"), 1, false))
+                    .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64)).executes(ctx ->
+                        giveItems(ctx.getSource().getPlayerOrException(), EntityArgument.getPlayer(ctx, "player"),
+                            IntegerArgumentType.getInteger(ctx, "amount"), false)))))
+                .then(Commands.literal("giverevivebeacon").then(Commands.argument("player", EntityArgument.player())
+                    .executes(ctx -> giveItems(ctx.getSource().getPlayerOrException(), EntityArgument.getPlayer(ctx, "player"), 1, true))
+                    .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64)).executes(ctx ->
+                        giveItems(ctx.getSource().getPlayerOrException(), EntityArgument.getPlayer(ctx, "player"),
+                            IntegerArgumentType.getInteger(ctx, "amount"), true)))))
                 .then(Commands.literal("sethearts").then(Commands.argument("player", EntityArgument.player())
                     .then(Commands.argument("amount", IntegerArgumentType.integer(1, 100)).executes(ctx -> {
                         setHearts(EntityArgument.getPlayer(ctx, "player"), IntegerArgumentType.getInteger(ctx, "amount")); return 1;
@@ -173,6 +188,31 @@ public final class ChillZoneLifesteal implements ModInitializer {
         item.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return item;
     }
+    private static ItemStack makeReviveBeacon() {
+        ItemStack item = new ItemStack(Items.BEACON);
+        item.set(DataComponents.CUSTOM_NAME, Component.literal("Revive Beacon").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+        CompoundTag tag = new CompoundTag(); tag.putBoolean(REVIVE_BEACON_MARKER, true);
+        item.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        return item;
+    }
+
+    private static int giveItems(ServerPlayer executor, ServerPlayer target, int requested, boolean beacon) {
+        int delivered = 0;
+        for (int i = 0; i < requested; i++) {
+            if (!target.getInventory().add(beacon ? makeReviveBeacon() : makeHeart())) break;
+            delivered++;
+        }
+        executor.sendSystemMessage(Component.literal("Delivered " + delivered + "/" + requested
+            + (beacon ? " Revive Beacon(s)" : " Heart(s)") + " to " + target.getName().getString() + "."));
+        if (delivered < requested) executor.sendSystemMessage(Component.literal("Remaining items not given: target inventory is full.").withStyle(ChatFormatting.YELLOW));
+        return delivered > 0 ? 1 : 0;
+    }
+
+    private static boolean mayCraftHeart(ServerPlayer player) {
+        // Recipe execution hook still pending: use this predicate when implementing the crafting output.
+        return heartCount(player) < 15;
+    }
+
     private static boolean isHeart(ItemStack item) {
         if (!item.is(Items.NETHER_STAR)) return false;
         CustomData data = item.get(DataComponents.CUSTOM_DATA);

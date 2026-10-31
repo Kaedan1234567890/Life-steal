@@ -1,43 +1,20 @@
-# Chill Zone Lifesteal 0.1.0-alpha.1 — CORE PROTOTYPE
+# Chill Zone Lifesteal 0.2.0-alpha.1 — source-only feature checkpoint
 
-This is an **independent from-scratch Fabric 26.3 server mod**, not a copy of LifeSteal FR.
+This is **NOT** the complete recipe/revival/storage update and **NOT** verified in Minecraft. It is a test source checkpoint based on prior 0.1.3-alpha.4 code.
 
-## Implemented in source (not yet compiled or server-tested)
-- PvP death transfers one heart from a victim to the killer, up to 20 hearts.
-- Maximum-health attribute updates and persists by UUID to `world/data/chillzone-lifesteal.json`.
-- Default 10 hearts, min 1, max 20; natural deaths do not lose hearts by default.
-- `/withdraw <amount>` gives uniquely tagged **vanilla Nether Stars** with bold red Heart names (no resource pack).
-- Right-click marked Heart to gain a heart instantly; ordinary Nether Stars are unaffected.
-- `/lifesteal`, `/lifesteal hearts`, OP-level-3 `/lifesteal admin giveheart <player>`, `sethearts <player> <amount>`, `maxhearts <amount>`, `pvploss on|off`, `naturalloss on|off`.
+Implemented now:
+- Existing PvP heart transfer code preserved.
+- `/lifesteal admin giveheart <player> [amount]` (1–64), player autocomplete.
+- `/lifesteal admin giverevivebeacon <player> [amount]` (1–64), player autocomplete.
+- Normal vanilla Beacon item, bold named `Revive Beacon`, with server-side custom-data marker.
+- `/lifesteal craftstatus` shows whether current equipped hearts are below 15 (a preview only; does NOT limit crafting yet).
+- Ordinary bold red Nether Star Heart remains.
 
-## NOT implemented in this alpha
-- Last-heart elimination/ban/revival, revive beacon item or hopper GUI, craft recipes.
-- Other settings from the 14-setting reference, full settings GUI, Lifesteal-specific LuckPerms nodes.
-- Combat tagging, home restrictions, item restriction GUI; Season 1 Combat core source is required.
-- Anti-farming, heart-cap economy balancing, sophisticated death attribution, restart/gameplay testing.
+**Not implemented or tested in this checkpoint:**
+- The two requested real 3x3 crafting recipes, recipe-book display or the under-15 crafting enforcement.
+- Revive Beacon right-click or 27-slot GUI and revival mechanics.
+- Preventing both items entering chests/containers, bundles, item frames, hoppers, etc.
+- Player elimination at zero hearts and mod-specific revival/pardons.
+- Old Combat timer/settings GUI.
 
-**Do not deploy on a live survival world.** Test build and behavior on an isolated test server first. When a player's heart count reaches one, this prototype deliberately does not ban the player.
-
-## GitHub
-Upload the ZIP contents at repository root. Actions → Build Chill Zone Lifesteal 0.1.0-alpha.1 → Run workflow. Only the successful JAR from Actions goes into the server `mods` folder. Java 25 is required for compilation.
-
-The provided source uses Mojang-mapped 26.3 APIs. Compilation has NOT been completed in this environment and minor API adjustments may be needed. Do not confuse source presence with verified functionality.
-
-
-## Alpha 2 — 26.3 compiler repairs
-- Replace the old `ServerPlayer.drop(ItemStack, boolean)` call with the 26.3 `giveOrDropStack(ItemStack)` API to avoid losing withdrawn Heart items when the inventory is full.
-- Replace integer `CommandSourceStack.hasPermission(3)` with the 26.3 Brigadier `Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)` requirement.
-- Gameplay design unchanged. These are source-level fixes; full Gradle compilation and in-game verification are still pending.
-
-
-## Alpha 3 inventory compatibility fix
-- Replaces nonexistent `ServerPlayer.giveOrDropStack(ItemStack)` with `ServerPlayer.getInventory().add(ItemStack)`, already used elsewhere in this source.
-- `/withdraw` now deducts only hearts that were successfully placed in the player's inventory. If inventory capacity runs out, undelivered hearts stay in the player's heart total.
-- This is a targeted fix for the GitHub compilation error at `ChillZoneLifesteal.java:120`; compilation and server behavior have **not** yet been independently verified.
-
-
-## Alpha 4 GitHub diagnostic build
-This update changes **only** the GitHub workflow and version, not Java gameplay or heart-transfer code.
-Run **Actions → Build Chill Zone Lifesteal 0.1.3-alpha.4 (diagnostic) → Run workflow**.
-The build has a hard timeout so it cannot hang forever. The `chillzone-lifesteal-alpha4-diagnostic-log` artifact appears even if compilation fails (when the log exists). Download it to identify the last Gradle step. A successful build produces a separate JAR artifact.
-Do not upload the ZIP as a Minecraft mod; the ZIP contains GitHub source.
+**Avoid installing over a working server build without a backup.** Github build and in-game results are unverified. The source has no Fabric dependencies available locally to compile.
