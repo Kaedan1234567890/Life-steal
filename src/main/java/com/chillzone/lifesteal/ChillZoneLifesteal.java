@@ -289,7 +289,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
                 p.sendSystemMessage(Component.literal("Daily Heart crafting: " + (3 - count) + "/3 remaining. " +
                     (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
-                    " WARNING: quota is not yet enforced when collecting crafting output.").withStyle(ChatFormatting.YELLOW));
+                    " NOTE: daily crafting limit enforcement is not active in this build.").withStyle(ChatFormatting.YELLOW));
                 return 1;
             }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
@@ -637,8 +637,10 @@ public final class ChillZoneLifesteal implements ModInitializer {
         }
     }
     private static void clearHeartCraftWindow(String id) {
-        state.craftedHeartsInWindow.remove(id);
-        state.heartCraftWindowStartedAt.remove(id);
+        // An admin skip must reset both values, not just the window timestamp.
+        // These records are persisted together with the rest of the Lifesteal state.
+        state.craftedHeartsInWindow.put(id, 0);
+        state.heartCraftWindowStartedAt.put(id, 0L);
         save();
     }
     // DO NOT restore the Heart recipe until on-take crafting validation is implemented.
