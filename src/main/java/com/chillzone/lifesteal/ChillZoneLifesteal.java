@@ -286,7 +286,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
 
     private static void openCombatSettingsMenu(ServerPlayer player) {
         SimpleContainer chest = new SimpleContainer(27);
-        ItemStack enable = new ItemStack(state.combatTagEnabled ? Items.LIME_DYE : Items.GRAY_DYE);
+        ItemStack enable = state.combatTagEnabled ? new ItemStack(Items.EMERALD) : new ItemStack(Items.REDSTONE);
         enable.set(DataComponents.CUSTOM_NAME, Component.literal("Combat tags: " + (state.combatTagEnabled ? "ON" : "OFF")));
         chest.setItem(11, enable);
         for (int seconds : new int[]{15, 30, 60}) {
