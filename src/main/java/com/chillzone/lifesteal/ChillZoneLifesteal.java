@@ -70,6 +70,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         int combatTagSeconds = 30;
         boolean combatTagEnabled = true;
         boolean containersAllowed = false;
+        Map<String, Integer> craftedHeartsInWindow = new HashMap<>();
+        Map<String, Long> heartCraftWindowStartedAt = new HashMap<>();
         Map<String, String> knownNames = new HashMap<>();
         Set<String> eliminated = new HashSet<>();
         Map<String, String> eliminatedNames = new HashMap<>();
@@ -87,6 +89,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (state.knownNames == null) state.knownNames = new HashMap<>();
             if (state.eliminatedNames == null) state.eliminatedNames = new HashMap<>();
             if (state.eliminatedKillers == null) state.eliminatedKillers = new HashMap<>();
+            if (state.craftedHeartsInWindow == null) state.craftedHeartsInWindow = new HashMap<>();
+            if (state.heartCraftWindowStartedAt == null) state.heartCraftWindowStartedAt = new HashMap<>();
             state.maxHearts = Math.max(1, state.maxHearts);
             for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
         });
@@ -260,12 +264,30 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 })));
             root.then(Commands.literal("craftstatus").executes(ctx -> {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
-                p.sendSystemMessage(Component.literal("Heart crafting eligibility: " +
-                    (mayCraftHeart(p) ? "allowed (below 15 hearts)" : "blocked (15 or more hearts)") +
-                    ". Crafting output enforcement will be added after the special recipes are implemented."));
+                refreshHeartCraftWindow(p.getUUID().toString());
+                String id = p.getUUID().toString();
+                int count = state.craftedHeartsInWindow.getOrDefault(id, 0);
+                long start = state.heartCraftWindowStartedAt.getOrDefault(id, 0L);
+                long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
+                p.sendSystemMessage(Component.literal("Daily Heart crafting: " + (3 - count) + "/3 remaining. " +
+                    (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
+                    " Crafting is temporarily disabled until the server-side output check is implemented.").withStyle(ChatFormatting.YELLOW));
                 return 1;
             }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .then(Commands.literal("craftskip")
+                    .executes(ctx -> {
+                        ServerPlayer p = ctx.getSource().getPlayerOrException();
+                        clearHeartCraftWindow(p.getUUID().toString());
+                        ctx.getSource().sendSuccess(() -> Component.literal("Your Heart crafting window was reset."), false);
+                        return 1;
+                    })
+                    .then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
+                        ServerPlayer p = EntityArgument.getPlayer(ctx, "player");
+                        clearHeartCraftWindow(p.getUUID().toString());
+                        ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting window reset for " + p.getGameProfile().name()), false);
+                        return 1;
+                    })))
                 .then(Commands.literal("giveheart").then(Commands.argument("player", EntityArgument.player())
                     .executes(ctx -> giveItems(ctx.getSource().getPlayerOrException(), EntityArgument.getPlayer(ctx, "player"), 1, false))
                     .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64)).executes(ctx ->
@@ -575,11 +597,19 @@ public final class ChillZoneLifesteal implements ModInitializer {
         return delivered > 0 ? 1 : 0;
     }
 
-    private static boolean mayCraftHeart(ServerPlayer player) {
-        // Recipe execution hook still pending: use this predicate when implementing the crafting output.
-        return heartCount(player) < 15;
+    private static void refreshHeartCraftWindow(String id) {
+        long started = state.heartCraftWindowStartedAt.getOrDefault(id, 0L);
+        if (started > 0 && System.currentTimeMillis() - started >= 86400000L) {
+            clearHeartCraftWindow(id);
+        }
     }
-
+    private static void clearHeartCraftWindow(String id) {
+        state.craftedHeartsInWindow.remove(id);
+        state.heartCraftWindowStartedAt.remove(id);
+        save();
+    }
+    // DO NOT restore the Heart recipe until on-take crafting validation is implemented.
+    // A GUI warning or recipe-book restriction alone cannot prevent duplication.
     private static boolean isHeart(ItemStack item) {
         if (!item.is(Items.NETHER_STAR)) return false;
         CustomData data = item.get(DataComponents.CUSTOM_DATA);
