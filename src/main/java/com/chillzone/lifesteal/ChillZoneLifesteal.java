@@ -238,6 +238,26 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 }
                 return 1;
             }));
+            root.then(Commands.literal("recipe")
+                .executes(ctx -> {
+                    ctx.getSource().sendSuccess(() -> Component.literal("Usage: /lifesteal recipe heart OR /lifesteal recipe beacon").withStyle(ChatFormatting.YELLOW), false);
+                    return 1;
+                })
+                .then(Commands.literal("heart").executes(ctx -> {
+                    ctx.getSource().sendSuccess(() -> Component.literal("--- Heart crafting recipe (3x3) ---").withStyle(ChatFormatting.RED), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Trial Key | Ghast Tear | Ominous Trial Key"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Special Ingredient | Enchanted Golden Apple | Special Ingredient"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Ominous Trial Key | Ghast Tear | Trial Key"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting is temporarily disabled in this emergency build while the 15-heart exploit is fixed.").withStyle(ChatFormatting.YELLOW), false);
+                    return 1;
+                }))
+                .then(Commands.literal("beacon").executes(ctx -> {
+                    ctx.getSource().sendSuccess(() -> Component.literal("--- Revive Beacon crafting recipe (3x3) ---").withStyle(ChatFormatting.GOLD), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Diamond Block | Netherite Ingot | Diamond Block"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Netherite Ingot | Beacon | Netherite Ingot"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Diamond Block | Lifesteal Heart | Diamond Block"), false);
+                    return 1;
+                })));
             root.then(Commands.literal("craftstatus").executes(ctx -> {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
                 p.sendSystemMessage(Component.literal("Heart crafting eligibility: " +
@@ -530,7 +550,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
     }
     private static ItemStack makeHeart() {
         ItemStack item = new ItemStack(Items.NETHER_STAR);
-        item.set(DataComponents.CUSTOM_NAME, Component.literal("Heart").withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
+        item.set(DataComponents.CUSTOM_NAME, Component.literal("Heart").withStyle(style -> style.withColor(ChatFormatting.RED).withBold(true).withItalic(false)));
         CompoundTag tag = new CompoundTag(); tag.putBoolean(HEART_MARKER, true);
         item.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return item;
