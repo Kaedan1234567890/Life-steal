@@ -98,10 +98,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
             ticks++;
             // Server-side open-screen cleanup. Doesn't yet protect unattended block entities
             // from hopper or other automated transfers; see RELEASE_NOTES.
-            if (ticks % 5 == 0) {
-                for (ServerPlayer player : s.getPlayerList().getPlayers()) {
-                    ejectRestrictedFromOpenContainer(player);
-                }
+            for (ServerPlayer player : s.getPlayerList().getPlayers()) {
+                ejectRestrictedFromOpenContainer(player);
             }
             combatTaggedUntil.entrySet().removeIf(e -> e.getValue() <= ticks);
             if (!pendingKicks.isEmpty()) {
@@ -276,11 +274,13 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (stack.isEmpty() || (!isHeart(stack) && !isReviveBeacon(stack))) continue;
             // Never delete items if the player inventory has no room.
             ItemStack copy = stack.copy();
-            if (own.add(copy)) {
-                slot.set(ItemStack.EMPTY);
-                slot.setChanged();
-                player.sendSystemMessage(Component.literal("Lifesteal items cannot be stored here. Returned to your inventory.").withStyle(ChatFormatting.YELLOW));
-            }
+            // Clear the external slot first and insert the marked stack into the player inventory.
+            // If it cannot all fit, drop the remainder at the player rather than leaving it in storage.
+            slot.set(ItemStack.EMPTY);
+            slot.setChanged();
+            own.add(copy);
+            if (!copy.isEmpty()) player.drop(copy, false);
+            player.sendSystemMessage(Component.literal("Lifesteal items cannot be stored here.").withStyle(ChatFormatting.YELLOW));
         }
     }
 
