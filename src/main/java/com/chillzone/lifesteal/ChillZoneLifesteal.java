@@ -261,7 +261,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     ctx.getSource().sendSuccess(() -> Component.literal("Trial Key | Ghast Tear | Ominous Trial Key"), false);
                     ctx.getSource().sendSuccess(() -> Component.literal("Special Ingredient | Enchanted Golden Apple | Special Ingredient"), false);
                     ctx.getSource().sendSuccess(() -> Component.literal("Ominous Trial Key | Ghast Tear | Trial Key"), false);
-                    ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting is temporarily disabled in this emergency build while the 15-heart exploit is fixed.").withStyle(ChatFormatting.YELLOW), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting limit: 3 per 24 hours. This TEST SOURCE does not yet enforce pickup quotas.").withStyle(ChatFormatting.YELLOW), false);
                     return 1;
                 }))
                 .then(Commands.literal("beacon").executes(ctx -> {
@@ -280,10 +280,23 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
                 p.sendSystemMessage(Component.literal("Daily Heart crafting: " + (3 - count) + "/3 remaining. " +
                     (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
-                    " Crafting is temporarily disabled until the server-side output check is implemented.").withStyle(ChatFormatting.YELLOW));
+                    " WARNING: quota is not yet enforced when collecting crafting output.").withStyle(ChatFormatting.YELLOW));
                 return 1;
             }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .then(Commands.literal("skip")
+                    .executes(ctx -> {
+                        ServerPlayer p = ctx.getSource().getPlayerOrException();
+                        clearHeartCraftWindow(p.getUUID().toString());
+                        ctx.getSource().sendSuccess(() -> Component.literal("Reset your Heart crafting allowance."), false);
+                        return 1;
+                    })
+                    .then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
+                        ServerPlayer p = EntityArgument.getPlayer(ctx, "player");
+                        clearHeartCraftWindow(p.getUUID().toString());
+                        ctx.getSource().sendSuccess(() -> Component.literal("Reset Heart crafting allowance for " + p.getGameProfile().name()), false);
+                        return 1;
+                    })))
                 .then(Commands.literal("craftskip")
                     .executes(ctx -> {
                         ServerPlayer p = ctx.getSource().getPlayerOrException();
