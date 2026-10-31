@@ -230,7 +230,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     .then(Commands.literal("off").executes(ctx -> {state.deathBans=false;save();return 1;})))
                 .then(Commands.literal("revive").executes(ctx -> {
                     openReviveMenu(ctx.getSource().getPlayerOrException(), true, 0); return 1;
-                }));
+                })));
             dispatcher.register(root);
         });
     }
