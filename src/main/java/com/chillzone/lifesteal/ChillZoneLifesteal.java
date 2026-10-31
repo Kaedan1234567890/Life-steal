@@ -69,6 +69,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         boolean deathBans = true;
         int combatTagSeconds = 30;
         boolean combatTagEnabled = true;
+        boolean containersAllowed = false;
+        Map<String, String> knownNames = new HashMap<>();
         Set<String> eliminated = new HashSet<>();
         Map<String, String> eliminatedNames = new HashMap<>();
         Map<String, String> eliminatedKillers = new HashMap<>();
@@ -82,6 +84,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             catch (Exception e) { System.err.println("[ChillZoneLifesteal] Unable to read state: " + e); }
             if (state == null || state.hearts == null) state = new State();
             if (state.eliminated == null) state.eliminated = new HashSet<>();
+            if (state.knownNames == null) state.knownNames = new HashMap<>();
             if (state.eliminatedNames == null) state.eliminatedNames = new HashMap<>();
             if (state.eliminatedKillers == null) state.eliminatedKillers = new HashMap<>();
             state.maxHearts = Math.max(1, state.maxHearts);
@@ -90,6 +93,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> save());
         ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
             ServerPlayer player = handler.player;
+            state.knownNames.put(player.getUUID().toString(), player.getGameProfile().name());
+            save();
             if (state.deathBans && state.eliminated.contains(player.getUUID().toString())) {
                 handler.disconnect(Component.literal("You have been death banned from Chill Zone SMP. You must be revived to rejoin.").withStyle(ChatFormatting.RED));
             }
@@ -99,7 +104,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             // Server-side open-screen cleanup. Doesn't yet protect unattended block entities
             // from hopper or other automated transfers; see RELEASE_NOTES.
             for (ServerPlayer player : s.getPlayerList().getPlayers()) {
-                ejectRestrictedFromOpenContainer(player);
+                if (!state.containersAllowed) ejectRestrictedFromOpenContainer(player);
             }
             combatTaggedUntil.entrySet().removeIf(e -> e.getValue() <= ticks);
             if (!pendingKicks.isEmpty()) {
@@ -217,6 +222,22 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
                 p.sendSystemMessage(Component.literal("Your hearts: " + heartCount(p) + "/" + state.maxHearts)); return 1;
             }));
+            root.then(Commands.literal("list").executes(ctx -> {
+                // Read existing saved heart totals; do not create records for this query.
+                List<Map.Entry<String, Integer>> ranking = new ArrayList<>(state.hearts.entrySet());
+                ranking.sort(Comparator.<Map.Entry<String, Integer>>comparingInt(e -> e.getValue()).reversed()
+                    .thenComparing(e -> state.knownNames.getOrDefault(e.getKey(), e.getKey()).toLowerCase(Locale.ROOT))
+                    .thenComparing(Map.Entry::getKey));
+                ctx.getSource().sendSuccess(() -> Component.literal("--- Chill Zone Lifesteal Top 10 ---").withStyle(ChatFormatting.GOLD), false);
+                if (ranking.isEmpty()) ctx.getSource().sendSuccess(() -> Component.literal("No heart records yet."), false);
+                for (int i = 0; i < Math.min(10, ranking.size()); i++) {
+                    var entry = ranking.get(i);
+                    String name = state.knownNames.getOrDefault(entry.getKey(), state.eliminatedNames.getOrDefault(entry.getKey(), entry.getKey()));
+                    int place = i + 1;
+                    ctx.getSource().sendSuccess(() -> Component.literal("#" + place + " | " + name + ": " + entry.getValue() + " hearts").withStyle(place <= 3 ? ChatFormatting.YELLOW : ChatFormatting.GRAY), false);
+                }
+                return 1;
+            }));
             root.then(Commands.literal("craftstatus").executes(ctx -> {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
                 p.sendSystemMessage(Component.literal("Heart crafting eligibility: " +
@@ -248,6 +269,9 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     .then(Commands.literal("off").executes(ctx -> {state.naturalDeathLoss=false;save();return 1;})))
                 .then(Commands.literal("deathbans").then(Commands.literal("on").executes(ctx -> {state.deathBans=true;save();return 1;}))
                     .then(Commands.literal("off").executes(ctx -> {state.deathBans=false;save();return 1;})))
+                .then(Commands.literal("containers")
+                    .then(Commands.literal("on").executes(ctx -> { state.containersAllowed = true; save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal container cleanup disabled: special items are allowed."), true); return 1; }))
+                    .then(Commands.literal("off").executes(ctx -> { state.containersAllowed = false; save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal container cleanup enabled: special items are disallowed."), true); return 1; })))
                 .then(Commands.literal("menu").executes(ctx -> {
                     openCombatSettingsMenu(ctx.getSource().getPlayerOrException()); return 1;
                 }))
@@ -347,7 +371,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             ItemStack enabled = new ItemStack(state.combatTagEnabled ? Items.EMERALD : Items.REDSTONE);
             enabled.set(DataComponents.CUSTOM_NAME, Component.literal("Combat Tag: " + (state.combatTagEnabled ? "ON" : "OFF")));
             chest.setItem(10, enabled);
-            int[] durations = {15, 30, 60};
+            int[] durations = {15, 30, 60, 90, 120};
             for (int i=0;i<durations.length;i++) {
                 ItemStack clock = new ItemStack(Items.CLOCK);
                 clock.set(DataComponents.CUSTOM_NAME, Component.literal("Duration: " + durations[i] + " seconds" + (state.combatTagSeconds == durations[i] ? " (Selected)" : "")));
@@ -368,6 +392,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     else if (slot == 12) state.combatTagSeconds = 15;
                     else if (slot == 13) state.combatTagSeconds = 30;
                     else if (slot == 14) state.combatTagSeconds = 60;
+                    else if (slot == 15) state.combatTagSeconds = 90;
+                    else if (slot == 16) state.combatTagSeconds = 120;
                     else return;
                     save();
                     openCombatCategory(player, category);
