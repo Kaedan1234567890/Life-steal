@@ -308,28 +308,69 @@ public final class ChillZoneLifesteal implements ModInitializer {
         }
     }
 
+    // Alpha 13: navigation test for the original Season 1 settings categories.
+    // Only the Combat Tag controls are functional. Other categories are deliberately
+    // read-only previews until the original Combat implementation is available.
+    private static final String[] COMBAT_CATEGORIES = {
+        "Inventory Limits", "Item Cooldowns", "Combat Log Settings",
+        "World Item Limits", "Enchant Level Limits", "Potion Control"
+    };
+    private static final net.minecraft.world.item.Item[] COMBAT_ICONS = {
+        Items.CHEST, Items.CLOCK, Items.IRON_SWORD,
+        Items.HOPPER, Items.ENCHANTED_BOOK, Items.POTION
+    };
     private static void openCombatSettingsMenu(ServerPlayer player) {
         SimpleContainer chest = new SimpleContainer(27);
-        ItemStack enable = state.combatTagEnabled ? new ItemStack(Items.EMERALD) : new ItemStack(Items.REDSTONE);
-        enable.set(DataComponents.CUSTOM_NAME, Component.literal("Combat tags: " + (state.combatTagEnabled ? "ON" : "OFF")));
-        chest.setItem(11, enable);
-        for (int seconds : new int[]{15, 30, 60}) {
-            int slot = seconds == 15 ? 12 : seconds == 30 ? 13 : 14;
-            ItemStack clock = new ItemStack(Items.CLOCK);
-            clock.set(DataComponents.CUSTOM_NAME, Component.literal("Combat duration: " + seconds + " seconds" + (state.combatTagSeconds == seconds ? " (Selected)" : "")));
-            chest.setItem(slot, clock);
+        int[] slots = {10, 11, 12, 14, 15, 16};
+        for (int i = 0; i < COMBAT_CATEGORIES.length; i++) {
+            ItemStack icon = new ItemStack(COMBAT_ICONS[i]);
+            icon.set(DataComponents.CUSTOM_NAME, Component.literal(COMBAT_CATEGORIES[i]).withStyle(ChatFormatting.GOLD));
+            chest.setItem(slots[i], icon);
         }
         player.openMenu(new MenuProvider() {
             @Override public Component getDisplayName() { return Component.literal("Chill Zone Combat Settings"); }
             @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player p) {
                 return new CombatSettingsMenu(id, inventory, chest, slot -> {
-                    if (slot == 11) state.combatTagEnabled = !state.combatTagEnabled;
+                    for (int i = 0; i < slots.length; i++) {
+                        if (slot == slots[i]) { openCombatCategory(player, i); return; }
+                    }
+                });
+            }
+        });
+    }
+    private static void openCombatCategory(ServerPlayer player, int category) {
+        SimpleContainer chest = new SimpleContainer(27);
+        ItemStack back = new ItemStack(Items.ARROW);
+        back.set(DataComponents.CUSTOM_NAME, Component.literal("Back to Settings").withStyle(ChatFormatting.YELLOW));
+        chest.setItem(22, back);
+        if (category == 2) {
+            ItemStack enabled = new ItemStack(state.combatTagEnabled ? Items.EMERALD : Items.REDSTONE);
+            enabled.set(DataComponents.CUSTOM_NAME, Component.literal("Combat Tag: " + (state.combatTagEnabled ? "ON" : "OFF")));
+            chest.setItem(10, enabled);
+            int[] durations = {15, 30, 60};
+            for (int i=0;i<durations.length;i++) {
+                ItemStack clock = new ItemStack(Items.CLOCK);
+                clock.set(DataComponents.CUSTOM_NAME, Component.literal("Duration: " + durations[i] + " seconds" + (state.combatTagSeconds == durations[i] ? " (Selected)" : "")));
+                chest.setItem(12+i, clock);
+            }
+        } else {
+            ItemStack info = new ItemStack(Items.BOOK);
+            info.set(DataComponents.CUSTOM_NAME, Component.literal("Preview only - restrictions not implemented").withStyle(ChatFormatting.RED));
+            chest.setItem(13, info);
+        }
+        player.openMenu(new MenuProvider() {
+            @Override public Component getDisplayName() { return Component.literal(COMBAT_CATEGORIES[category]); }
+            @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player p) {
+                return new CombatSettingsMenu(id, inventory, chest, slot -> {
+                    if (slot == 22) {openCombatSettingsMenu(player); return;}
+                    if (category != 2) return;
+                    if (slot == 10) state.combatTagEnabled = !state.combatTagEnabled;
                     else if (slot == 12) state.combatTagSeconds = 15;
                     else if (slot == 13) state.combatTagSeconds = 30;
                     else if (slot == 14) state.combatTagSeconds = 60;
                     else return;
                     save();
-                    openCombatSettingsMenu(player);
+                    openCombatCategory(player, category);
                 });
             }
         });
