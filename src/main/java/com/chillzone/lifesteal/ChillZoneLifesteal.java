@@ -31,6 +31,7 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.SimpleContainer;
@@ -52,6 +53,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
     private static State state = new State();
     private static Path saveFile;
     private static long ticks;
+    // Test implementation: combat tag duration is configurable in the built-in admin menu.
+    private static final Map<UUID, Long> combatTaggedUntil = new HashMap<>();
     private static final Set<UUID> handled = new HashSet<>();
     private static final Set<UUID> pendingKicks = new HashSet<>();
 
@@ -64,6 +67,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         boolean stealOnKill = true;
         Map<String, Integer> hearts = new HashMap<>();
         boolean deathBans = true;
+        int combatTagSeconds = 30;
+        boolean combatTagEnabled = true;
         Set<String> eliminated = new HashSet<>();
         Map<String, String> eliminatedNames = new HashMap<>();
         Map<String, String> eliminatedKillers = new HashMap<>();
@@ -91,6 +96,14 @@ public final class ChillZoneLifesteal implements ModInitializer {
         });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             ticks++;
+            // Server-side open-screen cleanup. Doesn't yet protect unattended block entities
+            // from hopper or other automated transfers; see RELEASE_NOTES.
+            if (ticks % 5 == 0) {
+                for (ServerPlayer player : s.getPlayerList().getPlayers()) {
+                    ejectRestrictedFromOpenContainer(player);
+                }
+            }
+            combatTaggedUntil.entrySet().removeIf(e -> e.getValue() <= ticks);
             if (!pendingKicks.isEmpty()) {
                 for (UUID id : new HashSet<>(pendingKicks)) {
                     ServerPlayer target = s.getPlayerList().getPlayer(id);
@@ -101,6 +114,15 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (ticks % 40 == 0) {
                 for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
             }
+        });
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, damage, baseDamageTaken, damageTaken, blocked) -> {
+            if (!state.combatTagEnabled) return;
+            if (!(entity instanceof ServerPlayer victim)) return;
+            if (!(damage.getEntity() instanceof ServerPlayer attacker)) return;
+            if (attacker.getUUID().equals(victim.getUUID())) return;
+            long expires = ticks + Math.max(1, state.combatTagSeconds) * 20L;
+            combatTaggedUntil.put(victim.getUUID(), expires);
+            combatTaggedUntil.put(attacker.getUUID(), expires);
         });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damage) -> {
             if (!(entity instanceof ServerPlayer victim)) return;
@@ -228,12 +250,83 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     .then(Commands.literal("off").executes(ctx -> {state.naturalDeathLoss=false;save();return 1;})))
                 .then(Commands.literal("deathbans").then(Commands.literal("on").executes(ctx -> {state.deathBans=true;save();return 1;}))
                     .then(Commands.literal("off").executes(ctx -> {state.deathBans=false;save();return 1;})))
+                .then(Commands.literal("menu").executes(ctx -> {
+                    openCombatSettingsMenu(ctx.getSource().getPlayerOrException()); return 1;
+                }))
+                .then(Commands.literal("combat").then(Commands.literal("status").executes(ctx -> {
+                    ServerPlayer p = ctx.getSource().getPlayerOrException();
+                    long remaining = Math.max(0, (combatTaggedUntil.getOrDefault(p.getUUID(), 0L) - ticks + 19) / 20);
+                    p.sendSystemMessage(Component.literal("Combat tag: " + remaining + "s; configured duration: " + state.combatTagSeconds + "s"));
+                    return 1;
+                })))
                 .then(Commands.literal("revive").executes(ctx -> {
                     openReviveMenu(ctx.getSource().getPlayerOrException(), true, 0); return 1;
                 })));
             dispatcher.register(root);
         });
     }
+    /** Return only marked Lifesteal items that have entered the external slots of an open menu. */
+    private static void ejectRestrictedFromOpenContainer(ServerPlayer player) {
+        AbstractContainerMenu menu = player.containerMenu;
+        if (menu == null || menu == player.inventoryMenu || menu instanceof ReviveMenu || menu instanceof CombatSettingsMenu) return;
+        Inventory own = player.getInventory();
+        for (Slot slot : menu.slots) {
+            if (slot.container instanceof Inventory) continue;
+            ItemStack stack = slot.getItem();
+            if (stack.isEmpty() || (!isHeart(stack) && !isReviveBeacon(stack))) continue;
+            // Never delete items if the player inventory has no room.
+            ItemStack copy = stack.copy();
+            if (own.add(copy)) {
+                slot.set(ItemStack.EMPTY);
+                slot.setChanged();
+                player.sendSystemMessage(Component.literal("Lifesteal items cannot be stored here. Returned to your inventory.").withStyle(ChatFormatting.YELLOW));
+            }
+        }
+    }
+
+    private static void openCombatSettingsMenu(ServerPlayer player) {
+        SimpleContainer chest = new SimpleContainer(27);
+        ItemStack enable = new ItemStack(state.combatTagEnabled ? Items.LIME_DYE : Items.GRAY_DYE);
+        enable.set(DataComponents.CUSTOM_NAME, Component.literal("Combat tags: " + (state.combatTagEnabled ? "ON" : "OFF")));
+        chest.setItem(11, enable);
+        for (int seconds : new int[]{15, 30, 60}) {
+            int slot = seconds == 15 ? 12 : seconds == 30 ? 13 : 14;
+            ItemStack clock = new ItemStack(Items.CLOCK);
+            clock.set(DataComponents.CUSTOM_NAME, Component.literal("Combat duration: " + seconds + " seconds" + (state.combatTagSeconds == seconds ? " (Selected)" : "")));
+            chest.setItem(slot, clock);
+        }
+        player.openMenu(new MenuProvider() {
+            @Override public Component getDisplayName() { return Component.literal("Chill Zone Combat Settings"); }
+            @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player p) {
+                return new CombatSettingsMenu(id, inventory, chest, slot -> {
+                    if (slot == 11) state.combatTagEnabled = !state.combatTagEnabled;
+                    else if (slot == 12) state.combatTagSeconds = 15;
+                    else if (slot == 13) state.combatTagSeconds = 30;
+                    else if (slot == 14) state.combatTagSeconds = 60;
+                    else return;
+                    save();
+                    openCombatSettingsMenu(player);
+                });
+            }
+        });
+    }
+
+    private static final class CombatSettingsMenu extends ChestMenu {
+        private final java.util.function.IntConsumer onClick;
+        CombatSettingsMenu(int id, Inventory inv, SimpleContainer chest, java.util.function.IntConsumer onClick) {
+            super(MenuType.GENERIC_9x3, id, inv, chest, 3);
+            this.onClick = onClick;
+        }
+        @Override public void clicked(int slot, int button, ContainerInput click, Player player) {
+            if (slot >= 0 && slot < 27) {
+                if (click == ContainerInput.PICKUP && button == 0) onClick.accept(slot);
+                return;
+            }
+            super.clicked(slot, button, click, player);
+        }
+        @Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
+    }
+
     private static boolean isReviveBeacon(ItemStack item) {
         if (!item.is(Items.BEACON)) return false;
         CustomData data = item.get(DataComponents.CUSTOM_DATA);
