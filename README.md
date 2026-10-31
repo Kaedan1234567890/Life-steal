@@ -1,20 +1,14 @@
-# Chill Zone Lifesteal 0.2.0-alpha.1 — source-only feature checkpoint
+# Chill Zone Lifesteal 0.2.1 — source-only development checkpoint
 
-This is **NOT** the complete recipe/revival/storage update and **NOT** verified in Minecraft. It is a test source checkpoint based on prior 0.1.3-alpha.4 code.
+This version **has not been compiled** or confirmed safe for a survival server. Do NOT replace the multiplayer-tested Lifesteal JAR yet.
 
-Implemented now:
-- Existing PvP heart transfer code preserved.
-- `/lifesteal admin giveheart <player> [amount]` (1–64), player autocomplete.
-- `/lifesteal admin giverevivebeacon <player> [amount]` (1–64), player autocomplete.
-- Normal vanilla Beacon item, bold named `Revive Beacon`, with server-side custom-data marker.
-- `/lifesteal craftstatus` shows whether current equipped hearts are below 15 (a preview only; does NOT limit crafting yet).
-- Ordinary bold red Nether Star Heart remains.
+Changes in this checkpoint:
+- Persistent `deathBans` toggle and eliminated UUID set in existing state JSON.
+- Last eligible PvP death marks the victim eliminated and kicks them. Rejoin is rejected while death bans are active.
+- `lifesteal admin deathbans on|off` toggles enforcement.
+- Prototype `lifesteal admin revive <online-player>` clears the mark; **offline revival is not implemented**.
+- Existing PvP heart transfer unchanged except final-heart killer gain handling.
 
-**Not implemented or tested in this checkpoint:**
-- The two requested real 3x3 crafting recipes, recipe-book display or the under-15 crafting enforcement.
-- Revive Beacon right-click or 27-slot GUI and revival mechanics.
-- Preventing both items entering chests/containers, bundles, item frames, hoppers, etc.
-- Player elimination at zero hearts and mod-specific revival/pardons.
-- Old Combat timer/settings GUI.
+Known gaps: crafting recipes, real 27-slot revival GUI, offline player registry, restricted storage enforcement, combat-tag menu, and verified compilation. The `deathbans off` toggle permits eliminated players to rejoin without resetting their elimination records.
 
-**Avoid installing over a working server build without a backup.** Github build and in-game results are unverified. The source has no Fabric dependencies available locally to compile.
+The alpha is meant for source review only, not deployment. Do not replace working player data.

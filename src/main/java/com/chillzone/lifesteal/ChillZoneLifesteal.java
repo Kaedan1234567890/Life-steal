@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -41,6 +42,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
     private static Path saveFile;
     private static long ticks;
     private static final Set<UUID> handled = new HashSet<>();
+    private static final Set<UUID> pendingKicks = new HashSet<>();
 
     private static class State {
         int startHearts = 10;
@@ -50,6 +52,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         boolean naturalDeathLoss = false;
         boolean stealOnKill = true;
         Map<String, Integer> hearts = new HashMap<>();
+        boolean deathBans = true;
+        Set<String> eliminated = new HashSet<>();
     }
 
     @Override public void onInitialize() {
@@ -59,12 +63,26 @@ public final class ChillZoneLifesteal implements ModInitializer {
             try { if (Files.isRegularFile(saveFile)) state = JSON.fromJson(Files.readString(saveFile), State.class); }
             catch (Exception e) { System.err.println("[ChillZoneLifesteal] Unable to read state: " + e); }
             if (state == null || state.hearts == null) state = new State();
+            if (state.eliminated == null) state.eliminated = new HashSet<>();
             state.maxHearts = Math.max(1, state.maxHearts);
             for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> save());
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
+            ServerPlayer player = handler.player;
+            if (state.deathBans && state.eliminated.contains(player.getUUID().toString())) {
+                handler.disconnect(Component.literal("You have been death banned from Chill Zone SMP. You must be revived to rejoin.").withStyle(ChatFormatting.RED));
+            }
+        });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             ticks++;
+            if (!pendingKicks.isEmpty()) {
+                for (UUID id : new HashSet<>(pendingKicks)) {
+                    ServerPlayer target = s.getPlayerList().getPlayer(id);
+                    if (target != null) target.connection.disconnect(Component.literal("You have been death banned from Chill Zone SMP. You must be revived to rejoin.").withStyle(ChatFormatting.RED));
+                    pendingKicks.remove(id);
+                }
+            }
             if (ticks % 40 == 0) {
                 for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
             }
@@ -85,9 +103,17 @@ public final class ChillZoneLifesteal implements ModInitializer {
                         }
                         killer.sendSystemMessage(Component.literal("You now have " + heartCount(killer) + " hearts!").withStyle(ChatFormatting.GREEN));
                     }
-                } else {
-                    // First prototype deliberately does not ban players: ban/revive integration requires separate verified moderation handling.
-                    victim.sendSystemMessage(Component.literal("You reached the Lifesteal minimum. Elimination is pending implementation.").withStyle(ChatFormatting.RED));
+                } else if (state.deathBans) {
+                    // Keep the original heart minimum but record elimination separately from moderation bans.
+                    state.eliminated.add(victim.getUUID().toString());
+                    save();
+                    victim.sendSystemMessage(Component.literal("You lost your final heart. You have been death banned from Chill Zone SMP until revived.").withStyle(ChatFormatting.RED));
+                    // Disconnect next tick: do not mutate the connection during the death callback.
+                    pendingKicks.add(victim.getUUID());
+                    if (state.stealOnKill) {
+                        if (heartCount(killer) < state.maxHearts) setHearts(killer, heartCount(killer) + 1);
+                        else killer.getInventory().add(makeHeart());
+                    }
                 }
             } else if (killer == null && state.naturalDeathLoss && heartCount(victim) > state.minHearts) {
                 setHearts(victim, heartCount(victim) - 1);
@@ -165,7 +191,27 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 .then(Commands.literal("pvploss").then(Commands.literal("on").executes(ctx -> {state.pvpLoss=true;save();return 1;}))
                     .then(Commands.literal("off").executes(ctx -> {state.pvpLoss=false;save();return 1;})))
                 .then(Commands.literal("naturalloss").then(Commands.literal("on").executes(ctx -> {state.naturalDeathLoss=true;save();return 1;}))
-                    .then(Commands.literal("off").executes(ctx -> {state.naturalDeathLoss=false;save();return 1;}))));
+                    .then(Commands.literal("off").executes(ctx -> {state.naturalDeathLoss=false;save();return 1;})))
+                .then(Commands.literal("deathbans").then(Commands.literal("on").executes(ctx -> {state.deathBans=true;save();return 1;}))
+                    .then(Commands.literal("off").executes(ctx -> {state.deathBans=false;save();return 1;})))
+                .then(Commands.literal("revive").then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx,builder) -> {
+                        // Offline elimination records are UUID-based; suggest names of known online players only.
+                        for (ServerPlayer player : ctx.getSource().getServer().getPlayerList().getPlayers())
+                            builder.suggest(player.getGameProfile().name());
+                        return builder.buildFuture();
+                    })
+                    .executes(ctx -> {
+                        String name = StringArgumentType.getString(ctx,"player");
+                        // This prototype only resolves online players reliably. Offline revival requires a name registry.
+                        ServerPlayer player = ctx.getSource().getServer().getPlayerList().getPlayerByName(name);
+                        if (player == null) {ctx.getSource().sendFailure(Component.literal("Offline-player revival needs the saved player registry; use a UUID in the next version.")); return 0;}
+                        state.eliminated.remove(player.getUUID().toString());
+                        setHearts(player, Math.max(1, state.startHearts));
+                        save();
+                        ctx.getSource().sendSuccess(() -> Component.literal("Revived " + name), false);
+                        return 1;
+                    }))));
             dispatcher.register(root);
         });
     }
