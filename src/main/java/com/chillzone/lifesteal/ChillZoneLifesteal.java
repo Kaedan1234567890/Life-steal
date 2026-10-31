@@ -56,6 +56,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
     private static long ticks;
     // Test implementation: combat tag duration is configurable in the built-in admin menu.
     private static final Map<UUID, Long> combatTaggedUntil = new HashMap<>();
+    private static final Map<UUID, UUID> mostRecentCombatOpponent = new HashMap<>();
     private static final Set<UUID> handled = new HashSet<>();
     private static final Set<UUID> pendingKicks = new HashSet<>();
 
@@ -145,6 +146,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
             long expires = ticks + 30L * 20L;
             combatTaggedUntil.put(victim.getUUID(), expires);
             combatTaggedUntil.put(attacker.getUUID(), expires);
+            mostRecentCombatOpponent.put(victim.getUUID(), attacker.getUUID());
+            mostRecentCombatOpponent.put(attacker.getUUID(), victim.getUUID());
         });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damage) -> {
             if (!(entity instanceof ServerPlayer victim)) return;
