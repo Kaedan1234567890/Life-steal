@@ -14,6 +14,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -114,8 +115,9 @@ public final class ChillZoneLifesteal implements ModInitializer {
             for (ServerPlayer p : s.getPlayerList().getPlayers()) {
                 long remainingTicks = combatTaggedUntil.getOrDefault(p.getUUID(), 0L) - ticks;
                 if (remainingTicks > 0) {
-                    p.displayClientMessage(Component.literal("IN COMBAT - " + ((remainingTicks + 19L) / 20L) + "s")
-                        .withStyle(ChatFormatting.RED), true);
+                    p.connection.send(new ClientboundSetActionBarTextPacket(
+                        Component.literal("IN COMBAT - " + ((remainingTicks + 19L) / 20L) + "s")
+                            .withStyle(ChatFormatting.RED)));
                 }
             }
             if (!pendingKicks.isEmpty()) {
