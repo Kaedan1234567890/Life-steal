@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "DID",
+    "IBI",
+    "DSD"
+  ],
+  "key": {
+    "D": "minecraft:diamond_block",
+    "I": "minecraft:netherite_ingot",
+    "B": "minecraft:beacon",
+    "S": "minecraft:nether_star"
+  },
+  "result": {
+    "id": "minecraft:beacon",
+    "count": 1,
+    "components": {
+      "minecraft:custom_data": {
+        "chillzone_lifesteal_revive_beacon": true
+      },
+      "minecraft:custom_name": {
+        "text": "Revive Beacon",
+        "color": "gold",
+        "bold": true,
+        "italic": false
+      }
+    }
+  }
+}
