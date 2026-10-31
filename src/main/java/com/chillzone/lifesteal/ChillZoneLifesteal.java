@@ -26,6 +26,17 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionResult;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.component.ResolvableProfile;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.nio.file.Files;
@@ -54,6 +65,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
         Map<String, Integer> hearts = new HashMap<>();
         boolean deathBans = true;
         Set<String> eliminated = new HashSet<>();
+        Map<String, String> eliminatedNames = new HashMap<>();
+        Map<String, String> eliminatedKillers = new HashMap<>();
     }
 
     @Override public void onInitialize() {
@@ -64,6 +77,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
             catch (Exception e) { System.err.println("[ChillZoneLifesteal] Unable to read state: " + e); }
             if (state == null || state.hearts == null) state = new State();
             if (state.eliminated == null) state.eliminated = new HashSet<>();
+            if (state.eliminatedNames == null) state.eliminatedNames = new HashMap<>();
+            if (state.eliminatedKillers == null) state.eliminatedKillers = new HashMap<>();
             state.maxHearts = Math.max(1, state.maxHearts);
             for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
         });
@@ -106,6 +121,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 } else if (state.deathBans) {
                     // Keep the original heart minimum but record elimination separately from moderation bans.
                     state.eliminated.add(victim.getUUID().toString());
+                    state.eliminatedNames.put(victim.getUUID().toString(), victim.getGameProfile().name());
+                    state.eliminatedKillers.put(victim.getUUID().toString(), killer.getGameProfile().name());
                     save();
                     victim.sendSystemMessage(Component.literal("You lost your final heart. You have been death banned from Chill Zone SMP until revived.").withStyle(ChatFormatting.RED));
                     // Disconnect next tick: do not mutate the connection during the death callback.
@@ -119,9 +136,13 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 setHearts(victim, heartCount(victim) - 1);
             }
         });
+        // Special Revive Beacons must open the same server-side GUI in every use context.
+        // Return SUCCESS before vanilla block placement/interaction; this prevents any
+        // transient beacon block and avoids losing the item when the menu is canceled.
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof ServerPlayer p)) return InteractionResult.PASS;
             ItemStack item = player.getItemInHand(hand);
+            if (isReviveBeacon(item)) return openReviveFromItem(p);
             if (!isHeart(item)) return InteractionResult.PASS;
             if (heartCount(p) >= state.maxHearts) {
                 p.sendSystemMessage(Component.literal("You already have the maximum hearts.").withStyle(ChatFormatting.RED));
@@ -131,6 +152,19 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (!p.getAbilities().instabuild) item.shrink(1);
             p.sendSystemMessage(Component.literal("You now have " + heartCount(p) + " hearts!").withStyle(ChatFormatting.GREEN));
             return InteractionResult.SUCCESS;
+        });
+        UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+            if (player instanceof ServerPlayer p && isReviveBeacon(player.getItemInHand(hand))) {
+                return openReviveFromItem(p);
+            }
+            return InteractionResult.PASS;
+        });
+        // Clicking an entity also counts as right-clicking with the special beacon.
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+            if (player instanceof ServerPlayer p && isReviveBeacon(player.getItemInHand(hand))) {
+                return openReviveFromItem(p);
+            }
+            return InteractionResult.PASS;
         });
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, selection) -> {
             dispatcher.register(Commands.literal("withdraw")
@@ -194,27 +228,110 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     .then(Commands.literal("off").executes(ctx -> {state.naturalDeathLoss=false;save();return 1;})))
                 .then(Commands.literal("deathbans").then(Commands.literal("on").executes(ctx -> {state.deathBans=true;save();return 1;}))
                     .then(Commands.literal("off").executes(ctx -> {state.deathBans=false;save();return 1;})))
-                .then(Commands.literal("revive").then(Commands.argument("player", StringArgumentType.word())
-                    .suggests((ctx,builder) -> {
-                        // Offline elimination records are UUID-based; suggest names of known online players only.
-                        for (ServerPlayer player : ctx.getSource().getServer().getPlayerList().getPlayers())
-                            builder.suggest(player.getGameProfile().name());
-                        return builder.buildFuture();
-                    })
-                    .executes(ctx -> {
-                        String name = StringArgumentType.getString(ctx,"player");
-                        // This prototype only resolves online players reliably. Offline revival requires a name registry.
-                        ServerPlayer player = ctx.getSource().getServer().getPlayerList().getPlayerByName(name);
-                        if (player == null) {ctx.getSource().sendFailure(Component.literal("Offline-player revival needs the saved player registry; use a UUID in the next version.")); return 0;}
-                        state.eliminated.remove(player.getUUID().toString());
-                        setHearts(player, Math.max(1, state.startHearts));
-                        save();
-                        ctx.getSource().sendSuccess(() -> Component.literal("Revived " + name), false);
-                        return 1;
-                    }))));
+                .then(Commands.literal("revive").executes(ctx -> {
+                    openReviveMenu(ctx.getSource().getPlayerOrException(), true, 0); return 1;
+                }));
             dispatcher.register(root);
         });
     }
+    private static boolean isReviveBeacon(ItemStack item) {
+        if (!item.is(Items.BEACON)) return false;
+        CustomData data = item.get(DataComponents.CUSTOM_DATA);
+        return data != null && data.copyTag().getBoolean(REVIVE_BEACON_MARKER).orElse(false);
+    }
+
+    private static List<String> eliminatedSorted() {
+        List<String> ids = new ArrayList<>(state.eliminated);
+        ids.sort(Comparator.comparing(id -> state.eliminatedNames.getOrDefault(id,id).toLowerCase(Locale.ROOT)));
+        return ids;
+    }
+
+    private static InteractionResult openReviveFromItem(ServerPlayer player) {
+        // Do not consume the beacon or place a block: confirmation consumes one only
+        // when a player was actually revived. Cancel/close therefore costs nothing.
+        openReviveMenu(player, false, 0);
+        return InteractionResult.SUCCESS;
+    }
+
+    private static void openReviveMenu(ServerPlayer player, boolean admin, int page) {
+        if (!admin && !hasReviveBeacon(player)) {
+            player.sendSystemMessage(Component.literal("You need a Revive Beacon in your inventory.").withStyle(ChatFormatting.RED));
+            return;
+        }
+        List<String> ids = eliminatedSorted();
+        int maxPage = Math.max(0,(ids.size()-1)/18);
+        int actualPage = Math.max(0,Math.min(maxPage,page));
+        SimpleContainer inventory = new SimpleContainer(27);
+        for (int i=0;i<18;i++) {
+            int index=actualPage*18+i;
+            if (index>=ids.size()) break;
+            String id=ids.get(index);
+            ItemStack head=new ItemStack(Items.PLAYER_HEAD);
+            String name=state.eliminatedNames.getOrDefault(id,id);
+            head.set(DataComponents.CUSTOM_NAME, Component.literal(name+" — Eliminated by "+state.eliminatedKillers.getOrDefault(id,"Unknown")).withStyle(ChatFormatting.RED));
+            inventory.setItem(i,head);
+        }
+        ItemStack prev=new ItemStack(Items.ARROW);prev.set(DataComponents.CUSTOM_NAME,Component.literal("Previous page"));inventory.setItem(18,prev);
+        ItemStack info=new ItemStack(Items.BOOK);info.set(DataComponents.CUSTOM_NAME,Component.literal("Revive players — Page "+(actualPage+1)+"/"+(maxPage+1)));inventory.setItem(22,info);
+        ItemStack next=new ItemStack(Items.ARROW);next.set(DataComponents.CUSTOM_NAME,Component.literal("Next page"));inventory.setItem(26,next);
+        player.openMenu(new MenuProvider(){
+            @Override public Component getDisplayName(){return Component.literal("Revive Players");}
+            @Override public AbstractContainerMenu createMenu(int id, Inventory inv, Player p){
+                return new ReviveMenu(id,inv,inventory,(slot)->{
+                    if(slot==18 && actualPage>0) openReviveMenu(player,admin,actualPage-1);
+                    else if(slot==26 && actualPage<maxPage) openReviveMenu(player,admin,actualPage+1);
+                    else if(slot>=0 && slot<18 && actualPage*18+slot<ids.size()) openConfirmMenu(player,admin,ids.get(actualPage*18+slot));
+                });
+            }
+        });
+    }
+    private static boolean hasReviveBeacon(ServerPlayer p){
+        for(int i=0;i<p.getInventory().getContainerSize();i++) if(isReviveBeacon(p.getInventory().getItem(i))) return true;
+        return false;
+    }
+    private static boolean consumeReviveBeacon(ServerPlayer p) {
+        for(int i=0;i<p.getInventory().getContainerSize();i++) {
+            ItemStack item=p.getInventory().getItem(i);
+            if(isReviveBeacon(item)) {item.shrink(1);return true;}
+        }
+        return false;
+    }
+    private static void openConfirmMenu(ServerPlayer player,boolean admin,String targetId){
+        if (!state.eliminated.contains(targetId)) {openReviveMenu(player,admin,0);return;}
+        SimpleContainer inv=new SimpleContainer(27);
+        String name=state.eliminatedNames.getOrDefault(targetId,targetId);
+        ItemStack cancel=new ItemStack(Items.RED_CONCRETE);cancel.set(DataComponents.CUSTOM_NAME,Component.literal("Cancel").withStyle(ChatFormatting.RED));inv.setItem(11,cancel);
+        ItemStack head=new ItemStack(Items.PLAYER_HEAD);head.set(DataComponents.CUSTOM_NAME,Component.literal(name));inv.setItem(13,head);
+        ItemStack confirm=new ItemStack(Items.LIME_CONCRETE);confirm.set(DataComponents.CUSTOM_NAME,Component.literal("Confirm revival").withStyle(ChatFormatting.GREEN));inv.setItem(15,confirm);
+        player.openMenu(new MenuProvider(){
+            @Override public Component getDisplayName(){return Component.literal("Revive "+name+"?");}
+            @Override public AbstractContainerMenu createMenu(int id,Inventory inventory,Player p){
+                return new ReviveMenu(id,inventory,inv,slot->{
+                    if(slot==11){openReviveMenu(player,admin,0);return;}
+                    if(slot!=15) return;
+                    if(!state.eliminated.contains(targetId)){player.sendSystemMessage(Component.literal("Already revived.").withStyle(ChatFormatting.RED));openReviveMenu(player,admin,0);return;}
+                    if(!admin && !consumeReviveBeacon(player)){player.sendSystemMessage(Component.literal("Revive Beacon missing; revival canceled.").withStyle(ChatFormatting.RED));player.closeContainer();return;}
+                    state.eliminated.remove(targetId);
+                    state.hearts.put(targetId,Math.min(state.maxHearts,4));
+                    save();
+                    player.sendSystemMessage(Component.literal("Successfully revived "+name+" with 4 hearts!").withStyle(ChatFormatting.GREEN));
+                    player.closeContainer();
+                });
+            }
+        });
+    }
+    private static class ReviveMenu extends ChestMenu {
+        private final java.util.function.IntConsumer handler;
+        ReviveMenu(int id, Inventory inv, SimpleContainer chest,java.util.function.IntConsumer handler){
+            super(MenuType.GENERIC_9x3,id,inv,chest,3);this.handler=handler;
+        }
+        @Override public void clicked(int slot,int button,ClickType click,Player player){
+            if(slot>=0 && slot<27){if(click==ClickType.PICKUP && button==0) handler.accept(slot);return;}
+            super.clicked(slot,button,click,player);
+        }
+        @Override public ItemStack quickMoveStack(Player player,int slot){return ItemStack.EMPTY;}
+    }
+
     private static int heartCount(ServerPlayer p) { return state.hearts.computeIfAbsent(p.getUUID().toString(), ignored -> state.startHearts); }
     private static void setHearts(ServerPlayer p, int amount) {
         state.hearts.put(p.getUUID().toString(), Math.max(1, Math.min(state.maxHearts, amount)));
