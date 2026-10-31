@@ -67,7 +67,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         boolean stealOnKill = true;
         Map<String, Integer> hearts = new HashMap<>();
         boolean deathBans = true;
-        int combatTagSeconds = 30;
+        int combatTagSeconds = 30; // Legacy value retained only for reading old saves; timer is fixed.
         boolean combatTagEnabled = true;
         boolean containersAllowed = false;
         Map<String, Integer> craftedHeartsInWindow = new HashMap<>();
@@ -111,6 +111,13 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 if (!state.containersAllowed) ejectRestrictedFromOpenContainer(player);
             }
             combatTaggedUntil.entrySet().removeIf(e -> e.getValue() <= ticks);
+            for (ServerPlayer p : s.getPlayerList().getPlayers()) {
+                long remainingTicks = combatTaggedUntil.getOrDefault(p.getUUID(), 0L) - ticks;
+                if (remainingTicks > 0) {
+                    p.displayClientMessage(Component.literal("IN COMBAT - " + ((remainingTicks + 19L) / 20L) + "s")
+                        .withStyle(ChatFormatting.RED), true);
+                }
+            }
             if (!pendingKicks.isEmpty()) {
                 for (UUID id : new HashSet<>(pendingKicks)) {
                     ServerPlayer target = s.getPlayerList().getPlayer(id);
@@ -127,7 +134,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (!(entity instanceof ServerPlayer victim)) return;
             if (!(damage.getEntity() instanceof ServerPlayer attacker)) return;
             if (attacker.getUUID().equals(victim.getUUID())) return;
-            long expires = ticks + Math.max(1, state.combatTagSeconds) * 20L;
+            long expires = ticks + 30L * 20L;
             combatTaggedUntil.put(victim.getUUID(), expires);
             combatTaggedUntil.put(attacker.getUUID(), expires);
         });
@@ -314,9 +321,6 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 .then(Commands.literal("containers")
                     .then(Commands.literal("on").executes(ctx -> { state.containersAllowed = true; save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal container cleanup disabled: special items are allowed."), true); return 1; }))
                     .then(Commands.literal("off").executes(ctx -> { state.containersAllowed = false; save(); ctx.getSource().sendSuccess(() -> Component.literal("Lifesteal container cleanup enabled: special items are disallowed."), true); return 1; })))
-                .then(Commands.literal("menu").executes(ctx -> {
-                    openCombatSettingsMenu(ctx.getSource().getPlayerOrException()); return 1;
-                }))
                 .then(Commands.literal("combat").then(Commands.literal("status").executes(ctx -> {
                     ServerPlayer p = ctx.getSource().getPlayerOrException();
                     long remaining = Math.max(0, (combatTaggedUntil.getOrDefault(p.getUUID(), 0L) - ticks + 19) / 20);
@@ -352,7 +356,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
     /** Return only marked Lifesteal items that have entered the external slots of an open menu. */
     private static void ejectRestrictedFromOpenContainer(ServerPlayer player) {
         AbstractContainerMenu menu = player.containerMenu;
-        if (menu == null || menu == player.inventoryMenu || menu instanceof ReviveMenu || menu instanceof CombatSettingsMenu) return;
+        if (menu == null || menu == player.inventoryMenu || menu instanceof ReviveMenu || menu instanceof CombatSettingsMenu
+                || menu instanceof net.minecraft.world.inventory.CraftingMenu) return;
         Inventory own = player.getInventory();
         for (Slot slot : menu.slots) {
             if (slot.container instanceof Inventory) continue;
