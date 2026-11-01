@@ -71,7 +71,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         boolean stealOnKill = true;
         Map<String, Integer> hearts = new HashMap<>();
         boolean deathBans = true;
-        int combatTagSeconds = 30; // Legacy value retained only for reading old saves; timer is fixed.
+        int combatTagSeconds = 30; // Configurable 15/30/60/90/120 seconds.
         boolean combatTagEnabled = true;
         boolean containersAllowed = false;
         Map<String, Integer> craftedHeartsInWindow = new HashMap<>();
@@ -143,7 +143,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             if (!(entity instanceof ServerPlayer victim)) return;
             if (!(damage.getEntity() instanceof ServerPlayer attacker)) return;
             if (attacker.getUUID().equals(victim.getUUID())) return;
-            long expires = ticks + 30L * 20L;
+            long expires = ticks + Math.max(1, state.combatTagSeconds) * 20L;
             combatTaggedUntil.put(victim.getUUID(), expires);
             combatTaggedUntil.put(attacker.getUUID(), expires);
             mostRecentCombatOpponent.put(victim.getUUID(), attacker.getUUID());
@@ -289,7 +289,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
                 p.sendSystemMessage(Component.literal("Daily Hearts Crafted: " + count + "/3. Hearts Remaining: " + Math.max(0, 3 - count) + ". " +
                     (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
-                    " NOTE: daily crafting limit enforcement is not active in this build.").withStyle(ChatFormatting.YELLOW));
+                    " WARNING: crafting pickup enforcement is not yet installed in this source build.").withStyle(ChatFormatting.YELLOW));
                 return 1;
             }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
