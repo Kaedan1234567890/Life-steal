@@ -47,7 +47,7 @@ import java.util.*;
 
 /** Independent Chill Zone implementation; does not load the old Lifesteal datapack. */
 public final class ChillZoneLifesteal implements ModInitializer {
-    public static final String BUILD_VERSION = "0.4.5-alpha.27-combat-crafting";
+    public static final String BUILD_VERSION = "0.4.6-alpha.28-startup-safety";
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String HEART_MARKER = "chillzone_lifesteal_heart";
     private static final String REVIVE_BEACON_MARKER = "chillzone_lifesteal_revive_beacon";
