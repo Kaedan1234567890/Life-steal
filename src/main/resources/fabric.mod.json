@@ -1,10 +1,21 @@
 {
- "schemaVersion": 1,
- "id": "chillzone_lifesteal",
- "version": "${version}",
- "name": "Chill Zone Lifesteal",
- "description": "Season 2 server-side heart transfer prototype",
- "environment": "server",
- "entrypoints": { "main": ["com.chillzone.lifesteal.ChillZoneLifesteal"] },
- "depends": {"minecraft":"26.3","fabricloader":">=0.19.5","fabric-api":"*"}
+  "schemaVersion": 1,
+  "id": "chillzone_lifesteal",
+  "version": "${version}",
+  "name": "Chill Zone Lifesteal \u2014 Alpha 27 Combat + Craft Quota",
+  "description": "Season 2 Lifesteal alpha27 crafting and combat patch",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "com.chillzone.lifesteal.ChillZoneLifesteal"
+    ]
+  },
+  "depends": {
+    "minecraft": "26.3",
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*"
+  },
+  "mixins": [
+    "chillzone-lifesteal.mixins.json"
+  ]
 }

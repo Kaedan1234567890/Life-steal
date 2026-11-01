@@ -47,6 +47,7 @@ import java.util.*;
 
 /** Independent Chill Zone implementation; does not load the old Lifesteal datapack. */
 public final class ChillZoneLifesteal implements ModInitializer {
+    public static final String BUILD_VERSION = "0.4.5-alpha.27-combat-crafting";
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String HEART_MARKER = "chillzone_lifesteal_heart";
     private static final String REVIVE_BEACON_MARKER = "chillzone_lifesteal_revive_beacon";
@@ -100,6 +101,16 @@ public final class ChillZoneLifesteal implements ModInitializer {
             for (ServerPlayer p : s.getPlayerList().getPlayers()) applyHealth(p);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> save());
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, s) -> {
+            ServerPlayer p = handler.player;
+            if (!isCombatTagged(p)) return;
+            combatTaggedUntil.remove(p.getUUID());
+            s.getPlayerList().broadcastSystemMessage(Component.literal("[COMBAT LOG] " + p.getGameProfile().name() + " has combat logged!")
+                .withStyle(ChatFormatting.RED, ChatFormatting.BOLD), false);
+            // Keep the death in the normal game lifecycle so inventories drop and
+            // existing AFTER_DEATH Lifesteal processing runs. This is not /kill command execution.
+            p.hurtServer((net.minecraft.server.level.ServerLevel) p.level(), p.damageSources().genericKill(), Float.MAX_VALUE);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
             ServerPlayer player = handler.player;
             state.knownNames.put(player.getUUID().toString(), player.getGameProfile().name());
@@ -214,6 +225,10 @@ public final class ChillZoneLifesteal implements ModInitializer {
             return InteractionResult.PASS;
         });
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, selection) -> {
+            dispatcher.register(Commands.literal("lifestealbuild").executes(ctx -> {
+                ctx.getSource().sendSuccess(() -> Component.literal("Chill Zone Lifesteal " + BUILD_VERSION).withStyle(ChatFormatting.GREEN), false);
+                return 1;
+            }));
             dispatcher.register(Commands.literal("withdraw")
                 .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64)).executes(ctx -> {
                     ServerPlayer p = ctx.getSource().getPlayerOrException();
@@ -270,7 +285,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     ctx.getSource().sendSuccess(() -> Component.literal("Trial Key | Ghast Tear | Ominous Trial Key"), false);
                     ctx.getSource().sendSuccess(() -> Component.literal("Special Ingredient | Enchanted Golden Apple | Special Ingredient"), false);
                     ctx.getSource().sendSuccess(() -> Component.literal("Ominous Trial Key | Ghast Tear | Trial Key"), false);
-                    ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting limit: 3 per 24 hours. This TEST SOURCE does not yet enforce pickup quotas.").withStyle(ChatFormatting.YELLOW), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting limit: 3 per 24h window, beginning with your first craft.").withStyle(ChatFormatting.YELLOW), false);
                     return 1;
                 }))
                 .then(Commands.literal("beacon").executes(ctx -> {
@@ -288,8 +303,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 long start = state.heartCraftWindowStartedAt.getOrDefault(id, 0L);
                 long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
                 p.sendSystemMessage(Component.literal("Daily Hearts Crafted: " + count + "/3. Hearts Remaining: " + Math.max(0, 3 - count) + ". " +
-                    (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
-                    " WARNING: crafting pickup enforcement is not yet installed in this source build.").withStyle(ChatFormatting.YELLOW));
+                    (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.")).withStyle(ChatFormatting.YELLOW));
                 return 1;
             }));
             root.then(Commands.literal("admin").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
@@ -643,7 +657,35 @@ public final class ChillZoneLifesteal implements ModInitializer {
         state.heartCraftWindowStartedAt.put(id, 0L);
         save();
     }
-    // WARNING Alpha25: Heart recipe restored from Alpha14. Crafting pickup quota is NOT enforced yet.
+    // Accessible from server-only crafting slot mixins.
+    public static boolean canTakeCraftedHeart(Player player, ItemStack stack) {
+        if (!isHeart(stack) || !(player instanceof ServerPlayer p)) return true;
+        String id = p.getUUID().toString();
+        refreshHeartCraftWindow(id);
+        return state.craftedHeartsInWindow.getOrDefault(id, 0) + stack.getCount() <= 3;
+    }
+    public static void recordCraftedHeart(Player player, ItemStack stack) {
+        if (!isHeart(stack) || !(player instanceof ServerPlayer p)) return;
+        String id = p.getUUID().toString();
+        refreshHeartCraftWindow(id);
+        long current = System.currentTimeMillis();
+        if (state.heartCraftWindowStartedAt.getOrDefault(id, 0L) == 0L) state.heartCraftWindowStartedAt.put(id, current);
+        int amount = Math.max(1, stack.getCount());
+        state.craftedHeartsInWindow.merge(id, amount, Integer::sum);
+        save();
+        p.sendSystemMessage(Component.literal("Hearts crafted: " + state.craftedHeartsInWindow.get(id) + "/3. Use /lifesteal craftstatus.")
+            .withStyle(ChatFormatting.YELLOW));
+    }
+    public static boolean isCombatTagged(ServerPlayer p) {
+        return state.combatTagEnabled && state.pvpEnabled && combatTaggedUntil.getOrDefault(p.getUUID(), 0L) > ticks;
+    }
+    public static boolean isCombatEscapeCommand(String input) {
+        String c = input.strip().toLowerCase(Locale.ROOT).split("\\s+", 2)[0];
+        if (c.startsWith("/")) c = c.substring(1);
+        if (c.contains(":")) c = c.substring(c.indexOf(':')+1);
+        return Set.of("home","homes","spawn","sethome","tpa","tpahere","tpaccept","tpyes","back","warp","warps","rtp","wild","randomtp","teleport","tp").contains(c);
+    }
+    // Heart recipe restored from Alpha14. Enforcement occurs at the server crafting result slot.
     private static boolean isHeart(ItemStack item) {
         if (!item.is(Items.NETHER_STAR)) return false;
         CustomData data = item.get(DataComponents.CUSTOM_DATA);
