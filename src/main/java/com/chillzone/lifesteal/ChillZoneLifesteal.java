@@ -47,7 +47,7 @@ import java.util.*;
 
 /** Independent Chill Zone implementation; does not load the old Lifesteal datapack. */
 public final class ChillZoneLifesteal implements ModInitializer {
-    public static final String BUILD_VERSION = "0.4.6-alpha.28-startup-safety";
+    public static final String BUILD_VERSION = "0.4.7-alpha.29-combat-attribution";
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String HEART_MARKER = "chillzone_lifesteal_heart";
     private static final String REVIVE_BEACON_MARKER = "chillzone_lifesteal_revive_beacon";
@@ -109,7 +109,10 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD), false);
             // Keep the death in the normal game lifecycle so inventories drop and
             // existing AFTER_DEATH Lifesteal processing runs. This is not /kill command execution.
-            p.hurtServer((net.minecraft.server.level.ServerLevel) p.level(), p.damageSources().genericKill(), Float.MAX_VALUE);
+            UUID attackerId = mostRecentCombatOpponent.get(p.getUUID());
+            ServerPlayer lastAttacker = attackerId == null ? null : s.getPlayerList().getPlayer(attackerId);
+            p.hurtServer((net.minecraft.server.level.ServerLevel) p.level(),
+                lastAttacker == null ? p.damageSources().genericKill() : p.damageSources().playerAttack(lastAttacker), Float.MAX_VALUE);
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
             ServerPlayer player = handler.player;
@@ -172,7 +175,8 @@ public final class ChillZoneLifesteal implements ModInitializer {
                         if (heartCount(killer) < state.maxHearts) {
                             setHearts(killer, heartCount(killer) + 1);
                         } else {
-                            killer.getInventory().add(makeHeart());
+                            ItemStack reward = makeHeart();
+                            if (!killer.getInventory().add(reward)) killer.drop(reward, false);
                         }
                         killer.sendSystemMessage(Component.literal("You now have " + heartCount(killer) + " hearts!").withStyle(ChatFormatting.GREEN));
                     }
@@ -187,7 +191,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     pendingKicks.add(victim.getUUID());
                     if (state.stealOnKill) {
                         if (heartCount(killer) < state.maxHearts) setHearts(killer, heartCount(killer) + 1);
-                        else killer.getInventory().add(makeHeart());
+                        else { ItemStack reward = makeHeart(); if (!killer.getInventory().add(reward)) killer.drop(reward, false); }
                     }
                 }
             } else if (killer == null && state.naturalDeathLoss && heartCount(victim) > state.minHearts) {
@@ -658,6 +662,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         save();
     }
     // Accessible from server-only crafting slot mixins.
+    public static boolean isCraftedHeartResult(ItemStack stack) { return isHeart(stack); }
     public static boolean canTakeCraftedHeart(Player player, ItemStack stack) {
         if (!isHeart(stack) || !(player instanceof ServerPlayer p)) return true;
         String id = p.getUUID().toString();
