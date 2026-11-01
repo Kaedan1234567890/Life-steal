@@ -287,7 +287,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                 int count = state.craftedHeartsInWindow.getOrDefault(id, 0);
                 long start = state.heartCraftWindowStartedAt.getOrDefault(id, 0L);
                 long remaining = start == 0 ? 0 : Math.max(0L, 86400000L - (System.currentTimeMillis() - start));
-                p.sendSystemMessage(Component.literal("Daily Heart crafting: " + (3 - count) + "/3 remaining. " +
+                p.sendSystemMessage(Component.literal("Daily Hearts Crafted: " + count + "/3. Hearts Remaining: " + Math.max(0, 3 - count) + ". " +
                     (start == 0 ? "Your window starts with your first craft." : "Resets in " + (remaining / 3600000) + "h " + ((remaining % 3600000) / 60000) + "m.") +
                     " NOTE: daily crafting limit enforcement is not active in this build.").withStyle(ChatFormatting.YELLOW));
                 return 1;
@@ -297,13 +297,13 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     .executes(ctx -> {
                         ServerPlayer p = ctx.getSource().getPlayerOrException();
                         clearHeartCraftWindow(p.getUUID().toString());
-                        ctx.getSource().sendSuccess(() -> Component.literal("Reset your Heart crafting allowance."), false);
+                        ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting reset: 0/3 crafted, cooldown 0h 0m."), false);
                         return 1;
                     })
                     .then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
                         ServerPlayer p = EntityArgument.getPlayer(ctx, "player");
                         clearHeartCraftWindow(p.getUUID().toString());
-                        ctx.getSource().sendSuccess(() -> Component.literal("Reset Heart crafting allowance for " + p.getGameProfile().name()), false);
+                        ctx.getSource().sendSuccess(() -> Component.literal("Heart crafting reset for " + p.getGameProfile().name() + ": 0/3 crafted, cooldown 0h 0m."), false);
                         return 1;
                     })))
                 .then(Commands.literal("craftskip")
