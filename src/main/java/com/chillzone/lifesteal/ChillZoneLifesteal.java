@@ -643,8 +643,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         state.heartCraftWindowStartedAt.put(id, 0L);
         save();
     }
-    // DO NOT restore the Heart recipe until on-take crafting validation is implemented.
-    // A GUI warning or recipe-book restriction alone cannot prevent duplication.
+    // WARNING Alpha25: Heart recipe restored from Alpha14. Crafting pickup quota is NOT enforced yet.
     private static boolean isHeart(ItemStack item) {
         if (!item.is(Items.NETHER_STAR)) return false;
         CustomData data = item.get(DataComponents.CUSTOM_DATA);
