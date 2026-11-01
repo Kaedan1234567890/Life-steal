@@ -47,7 +47,7 @@ import java.util.*;
 
 /** Independent Chill Zone implementation; does not load the old Lifesteal datapack. */
 public final class ChillZoneLifesteal implements ModInitializer {
-    public static final String BUILD_VERSION = "0.4.7-alpha.29-combat-attribution";
+    public static final String BUILD_VERSION = "0.4.9-alpha.31-command-fix";
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String HEART_MARKER = "chillzone_lifesteal_heart";
     private static final String REVIVE_BEACON_MARKER = "chillzone_lifesteal_revive_beacon";
@@ -58,6 +58,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
     // Test implementation: combat tag duration is configurable in the built-in admin menu.
     private static final Map<UUID, Long> combatTaggedUntil = new HashMap<>();
     private static final Map<UUID, UUID> mostRecentCombatOpponent = new HashMap<>();
+    private static final Set<UUID> combatLoggedOnDisconnect = new HashSet<>();
     private static final Set<UUID> handled = new HashSet<>();
     private static final Set<UUID> pendingKicks = new HashSet<>();
 
@@ -105,6 +106,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
             ServerPlayer p = handler.player;
             if (!isCombatTagged(p)) return;
             combatTaggedUntil.remove(p.getUUID());
+            combatLoggedOnDisconnect.add(p.getUUID());
             s.getPlayerList().broadcastSystemMessage(Component.literal("[COMBAT LOG] " + p.getGameProfile().name() + " has combat logged!")
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD), false);
             // Keep the death in the normal game lifecycle so inventories drop and
@@ -116,6 +118,10 @@ public final class ChillZoneLifesteal implements ModInitializer {
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
             ServerPlayer player = handler.player;
+            if (combatLoggedOnDisconnect.remove(player.getUUID())) {
+                player.sendSystemMessage(Component.literal("You combat logged, and now you have to pay for it.")
+                    .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
+            }
             state.knownNames.put(player.getUUID().toString(), player.getGameProfile().name());
             save();
             if (state.deathBans && state.eliminated.contains(player.getUUID().toString())) {
@@ -688,7 +694,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
         String c = input.strip().toLowerCase(Locale.ROOT).split("\\s+", 2)[0];
         if (c.startsWith("/")) c = c.substring(1);
         if (c.contains(":")) c = c.substring(c.indexOf(':')+1);
-        return Set.of("home","homes","spawn","sethome","tpa","tpahere","tpaccept","tpyes","back","warp","warps","rtp","wild","randomtp","teleport","tp").contains(c);
+        return Set.of("home","homes","spawn","sethome","tpa","tpahere","tpaccept","tpdeny","tpyes","tpno","tpcancel","tpacancel","tpahereaccept","back","warp","warps","rtp","wild","randomtp","teleport","tp","tphere","tpask","call","return").contains(c);
     }
     // Heart recipe restored from Alpha14. Enforcement occurs at the server crafting result slot.
     private static boolean isHeart(ItemStack item) {

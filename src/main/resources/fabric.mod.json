@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "chillzone_lifesteal",
   "version": "${version}",
-  "name": "Chill Zone Lifesteal \u2014 Alpha 27 Combat + Craft Quota",
-  "description": "Season 2 Lifesteal alpha27 crafting and combat patch",
+  "name": "Chill Zone Lifesteal \u2014 Alpha 31 Combat Command Fix",
+  "description": "Season 2 Lifesteal Alpha31 narrow command interception correction",
   "environment": "server",
   "entrypoints": {
     "main": [
