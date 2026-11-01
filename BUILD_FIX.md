@@ -1,0 +1,1 @@
+Alpha 30: Minecraft 26.3 drop method signature fix. Replaced invalid killer.drop(ItemStack,boolean) with direct ItemEntity spawning when inventory add fails. No other gameplay changes. Not compiled locally.

@@ -176,7 +176,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                             setHearts(killer, heartCount(killer) + 1);
                         } else {
                             ItemStack reward = makeHeart();
-                            if (!killer.getInventory().add(reward)) killer.drop(reward, false);
+                            if (!killer.getInventory().add(reward)) killer.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(killer.level(), killer.getX(), killer.getY(), killer.getZ(), reward));
                         }
                         killer.sendSystemMessage(Component.literal("You now have " + heartCount(killer) + " hearts!").withStyle(ChatFormatting.GREEN));
                     }
@@ -191,7 +191,7 @@ public final class ChillZoneLifesteal implements ModInitializer {
                     pendingKicks.add(victim.getUUID());
                     if (state.stealOnKill) {
                         if (heartCount(killer) < state.maxHearts) setHearts(killer, heartCount(killer) + 1);
-                        else { ItemStack reward = makeHeart(); if (!killer.getInventory().add(reward)) killer.drop(reward, false); }
+                        else { ItemStack reward = makeHeart(); if (!killer.getInventory().add(reward)) killer.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(killer.level(), killer.getX(), killer.getY(), killer.getZ(), reward)); }
                     }
                 }
             } else if (killer == null && state.naturalDeathLoss && heartCount(victim) > state.minHearts) {
